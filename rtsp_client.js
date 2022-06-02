@@ -434,24 +434,32 @@
             let pipe4Socket = node.ffmpegProcess.stdio[4];
             pipe4Socket.on('data', function(data) {
                 if (data.length > 1) {
-                    // An image can be composed of one or multiple chunk when receiving stream data.
-                    // Indeed the ffmpeg's pipe2image produces images which will be feed into Node-RED via a pipe.
-                    // However the pipe buffer is limited by OS constraints, e.g. 65 Kbyte on a Raspberry Pi.
-                    // When an individual jpeg size exceeds the OS buffer limitation, the image is splitted into chunks.
-                    // Therefore we will join the chunks together again to recreate the images from the chunks.
-                    if(!node.pipe2jpeg) {
-                        node.pipe2jpeg = new Pipe2Jpeg();
-                        
-                        node.pipe2jpeg.on('jpeg', function(jpeg) {
-                           node.send([null, null, null, {payload: jpeg}]);
-                        })
-
-                        node.pipe2jpeg.on('error', function(err) {
-                            node.error("error in pipe to jpeg: " + err);
-                        })
+                    if(data[0] == 0xff && data[1] == 0xd8 && data[data.length -2 ] == 0xff && data[data.length - 1] == 0xd9) {
+                        // The data buffer starts with ffd8 and ends with ffd9, which means it represents 1 complete jpeg image.
+                        // In this case it is not useful to use pipe2jpeg, because it will search through the entire buffer to find
+                        // the ffd8 and ffd9 sequences (which means we would waste a lot of system resources).
+                        node.send([null, null, null, {payload: data}]);
                     }
-                    
-                    node.pipe2jpeg.write(data); 
+                    else {
+                        // An image can be composed of one or multiple chunk when receiving stream data.
+                        // Indeed the ffmpeg's pipe2image produces images which will be feed into Node-RED via a pipe.
+                        // However the pipe buffer is limited by OS constraints, e.g. 65 Kbyte on a Raspberry Pi.
+                        // When an individual jpeg size exceeds the OS buffer limitation, the image is splitted into chunks.
+                        // Therefore we will join the chunks together again to recreate the images from the chunks.
+                        if(!node.pipe2jpeg) {
+                            node.pipe2jpeg = new Pipe2Jpeg();
+                            
+                            node.pipe2jpeg.on('jpeg', function(jpeg) {
+                               node.send([null, null, null, {payload: jpeg}]);
+                            })
+
+                            node.pipe2jpeg.on('error', function(err) {
+                                node.error("error in pipe to jpeg: " + err);
+                            })
+                        }
+                        
+                        node.pipe2jpeg.write(data);
+                    }
                 }
             });
 
