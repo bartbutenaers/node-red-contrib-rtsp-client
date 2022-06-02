@@ -20,14 +20,18 @@
                 value: "",
                 validate: function (cmdPath) {
                     return cmdPath === '' || /^\s*$|ffmpeg/i.test(cmdPath);
-                },
+                }
             },
             rtspUrl: {value: ""},
+            statisticsPeriod: {value: null},
+            restartPeriod: {value: null},
+            autoStart: {value: "disable"},
             videoCodec: {value: "copy"},
             videoFrameRate: {value: null},
             videoWidth: {value: null},
             videoHeight: {value: null},
             videoQuality: {value: null},
+            minFragDuration: {value: null},
             audioCodec: {value: "copy"},
             audioSampleRate: {value: null},
             audioBitRate: {value: null},
@@ -47,7 +51,7 @@
         },
         inputs:1,
         outputs:4,
-        outputLabels: ["data", "status", "progress", "jpeg"],  
+        outputLabels: ["data", "status", "statistics", "jpeg"],  // statistics corresponds to the ffmpeg 'progress'
         icon: "font-awesome/fa-file-video-o",
         paletteLabel: "rtsp",
         label: function() {
@@ -56,6 +60,24 @@
         oneditprepare: function() { 
             var node = this;
             
+            $("#node-input-videoCodec").on('change', function() {
+                if(this.value === "none") {
+                    $(".rtsp-video-input").prop('disabled', true).addClass('disabled');
+                }
+                else {
+                    $(".rtsp-video-input").prop('disabled', false).removeClass('disabled');
+                }
+            });
+
+            $("#node-input-audioCodec").on('change', function() {
+                if(this.value === "none") {
+                    $(".rtsp-audio-input").prop('disabled', true).addClass('disabled');
+                }
+                else {
+                    $(".rtsp-audio-input").prop('disabled', false).removeClass('disabled');
+                }
+            });
+
             // Show tabsheets
             node.tabs = RED.tabs.create({
                 id: "node-rtsp-tabs",
@@ -133,37 +155,59 @@
                     <option value="http">HTTP</option>
                 </select>
             </div>
+            <div class="form-row">
+                <label for="node-input-statisticsPeriod"><i class="fa fa-arrows-h"></i> Stats period</label>
+                <input type="number" id="node-input-statisticsPeriod">
+            </div>
+            <div class="form-row">
+                <label for="node-input-restartPeriod"><i class="fa fa-clock-o"></i> Restart period</label>
+                <input type="number" id="node-input-restartPeriod">
+            </div>
+            <div class="form-row">
+                <label for="node-input-autoStart"><i class="fa fa-chevron-circle-right"></i> Auto start</label>
+                <select id="node-input-autoStart" style="width:70%;">
+                    <option value="enable">Enable</option>
+                    <option value="disable">Disable</option> 
+                </select>
+            </div>
         </div>
         <div id="node-rtsp-tab-video" style="position: relative; margin-top: 30px;">
             <div class="form-row">
                 <label for="node-input-videoCodec"><i class="fa fa-video-camera"></i> Codec</label>
                 <select id="node-input-videoCodec" style="width:70%;">
+                    <option value="none">No video</option> 
                     <option value="copy">Copy input codec</option> 
                     <option value="libx264">H.264</option>
                     <option value="libx265">H.265 (= HEVC)</option>
                     <option value="libx265">H.264 OMX (GPU acceleration)</option>
+                    <option value="h264_mmal">H.264 MMAL (GPU acceleration RPI)</option>
                 </select>
             </div>
             <div class="form-row">
                 <label for="node-input-videoFrameRate"><i class="fa fa-tachometer"></i> Frame rate</label>
-                <input type="number" id="node-input-videoFrameRate">
+                <input type="number" id="node-input-videoFrameRate" class="rtsp-video-input">
             </div>
             <div class="form-row">
                 <label for="node-input-videoWidth"><i class="fa fa-arrows"></i> Resolution</label>
-                <span for="node-input-videoWidth">width</span>
-                <input type="number" id="node-input-videoWidth" style="width:80px">
-                <span for="node-input-videoHeight" style="margin-left:20px;"> height</span>
-                <input type="number" id="node-input-videoHeight" style="width:80px">
+                <span for="node-input-videoWidth" class="rtsp-video-input">width</span>
+                <input type="number" id="node-input-videoWidth" style="width:80px" class="rtsp-video-input">
+                <span for="node-input-videoHeight" class="rtsp-video-input" style="margin-left:20px;"> height</span>
+                <input type="number" id="node-input-videoHeight" style="width:80px" class="rtsp-video-input">
             </div>
             <div class="form-row">
                 <label for="node-input-videoQuality"><i class="fa fa-filter"></i> Quality</label>
-                <input type="number" id="node-input-videoQuality">
+                <input type="number" id="node-input-videoQuality" class="rtsp-video-input">
             </div>
+            <div class="form-row">
+                <label for="node-input-minFragDuration"><i class="fa fa-arrows-h"></i> Min frag duration</label>
+                <input type="number" id="node-input-minFragDuration" class="rtsp-video-input">
+            </div>            
         </div>
         <div id="node-rtsp-tab-audio" style="position: relative; margin-top: 30px;">
             <div class="form-row">
                 <label for="node-input-audioCodec"><i class="fa fa-volume-up"></i> Codec</label>
                 <select id="node-input-audioCodec" style="width:70%;">
+                    <option value="none">No audio</option>
                     <option value="copy">Copy input codec</option>
                     <!-- FFmpeg supports two AAC-LC encoders (aac and libfdk_aac) and one HE-AAC (v1/2) encoder (libfdk_aac).     -->
                     <!-- The license of libfdk_aac is not compatible with GPL, so it will not included in pre-build ffmpeg builds.-->
@@ -175,11 +219,11 @@
             </div>    
             <div class="form-row">
                 <label for="node-input-audioSampleRate"><i class="fa fa-filter"></i> Sample rate</label>
-                <input type="number" id="node-input-audioSampleRate">
+                <input type="number" id="node-input-audioSampleRate" class="rtsp-audio-input">
             </div>
             <div class="form-row">
                 <label for="node-input-audioBitRate"><i class="fa fa-filter"></i> Bit rate</label>
-                <input type="number" id="node-input-audioBitRate">
+                <input type="number" id="node-input-audioBitRate" class="rtsp-audio-input">
             </div>
         </div>
         <div id="node-rtsp-tab-jpeg" style="position: relative; margin-top: 30px;">
