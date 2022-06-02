@@ -1,0 +1,40 @@
+{
+    "name": "node-red-contrib-rtsp-client",
+    "version": "1.0.0",
+    "description": "A Node-RED node that acts as an RTSP client (via Ffmpeg)",
+    "dependencies": {
+        "pipe2jpeg": "^0.3.1"
+    },
+    "author": {
+        "name": "Bart Butenaers"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "node-red",
+        "ffmpeg",
+        "rtsp",
+        "mp4",
+        "aac",
+        "live",
+        "stream",
+        "cam"
+        "audio",
+        "video",
+        "jpeg",
+        "snapshot",
+        "image"
+    ],
+    "bugs": {
+        "url": "https://github.com/bartbutenaers/node-red-contrib-rtsp-client/issues"
+    },
+    "homepage": "https://github.com/bartbutenaers/node-red-contrib-rtsp-client",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/bartbutenaers/node-red-contrib-rtsp-client.git"
+    },
+    "node-red": {
+        "nodes": {
+            "rtsp-client": "rtsp_client.js"
+        }
+    }
+}
