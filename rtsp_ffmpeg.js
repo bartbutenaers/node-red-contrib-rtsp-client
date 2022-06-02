@@ -17,16 +17,20 @@
     var settings = RED.settings;
     const os = require('node:os');
     const Pipe2Jpeg = require('pipe2jpeg');
-    const { spawn, ChildProcess } = require('child_process');
+    const { exec, spawn, ChildProcess } = require('child_process');
     
     function FFmpegRtspNode(config) {
         RED.nodes.createNode(this, config);
         this.ffmpegPath         = config.ffmpegPath.trim();
         this.rtspUrl            = config.rtspUrl;
+        this.statisticsPeriod   = config.statisticsPeriod;
+        this.restartPeriod      = config.restartPeriod;
+        this.autoStart          = config.autoStart;
         this.videoFrameRate     = config.videoFrameRate;
-	    this.videoWidth         = config.videoWidth;
+        this.videoWidth         = config.videoWidth;
         this.videoHeight        = config.videoHeight;
         this.videoQuality       = config.videoQuality;
+        this.minFragDuration    = config.minFragDuration;
         this.videoCodec         = config.videoCodec;
         this.audioCodec         = config.audioCodec;
         this.audioSampleRate    = config.audioSampleRate;
@@ -43,16 +47,20 @@
         this.ffmpegProcess      = null;
         this.processStatus      = "STOPPED";
         this.jpegChunks         = [];
+        this.restartPolicy      = 'DISABLE';
         
         var node = this;
         
         node.status({ fill: 'blue', shape: 'dot', text: "stopped" });
         
         // Insert the credentials into the rtsp url for basic authentication.
-        // TODO how does ffmpeg handle digest authentication?????????????
-        if (node.credentials.userName && node.credentials.password) {
+        if(node.credentials.userName && node.credentials.password) {
             this.rtspUrl = this.rtspUrl.replace('rtsp://', 'rtsp://' + node.credentials.userName + ':' + node.credentials.password + '@');
-        }    
+        }
+        
+        if(node.autoStart === "enable") {
+            startFFmpegProcess(null);
+        }
 
         function startFFmpegProcess(msg) {
             if (node.processStatus === "RUNNING") {
@@ -60,15 +68,19 @@
                 // No need to stop the process
                 return;
             }
-            
+
             let ffmpegCmdArgs = [];
             
+            // ----------------------------------------------------------------------------------------------
+            // Input (stream) options
+            // ----------------------------------------------------------------------------------------------
+
             // Send only error data on stderr
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-loglevel', '+level+fatal']);
 
             // Make sure the progress is clear and parsable (see https://superuser.com/a/1460400)
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-nostats']);
-            
+
             // The format of the input stream should be rtsp
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'rtsp']);
 
@@ -82,18 +94,22 @@
                 // Transport protocol HTTP can be used for tunnelling over HTTP through proxies.
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-rtsp_transport', node.transportProtocol]);
             }
+
             if(node.socketTimeout) {
                 // Set the (TP) socket I/O timeout in microseconds
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-timeout', node.socketTimeout]);
             }
+
             if(node.maximumDelay) {
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-max_delay', node.maximumDelay]);
-            }                    
+            }
+
             if(node.socketBufferSize) {
                 // Set the maximum UDP socket receive buffer size in bytes.  The default size is 384 KB.
                 // This buffer size can have effect on image smearing (see https://github.com/ZoneMinder/zoneminder/issues/811).
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-buffer_size', node.socketBufferSize]);
-            }              
+            }
+
             if(node.reorderQueueSize) {
                 // This queue is only relevant when using UDP:
                 // When receiving data over UDP, packets may arrive out of order or may get lost totally.
@@ -103,71 +119,123 @@
                 // Caution: higher values will result in greater latency.
                 // Note that the reorder queue can be disabled completely by setting the max_delay to 0.
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-reorder_queue_size', node.reorderQueueSize]);
-            }         
+            }
+
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-i', node.rtspUrl]);
-            
-            // TODO dit enkel doen indien gevraagd op de config page -> extra checkbox voorzien...
+
+            // ----------------------------------------------------------------------------------------------
+            // Output 'mp4' (pipe 1) options
+            // ----------------------------------------------------------------------------------------------
+
             // Mux the rtsp audio and video content into an mp4 container (which can be played by a browser)
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'mp4']);
-            
-            if(node.audioCodec) {
+
+            if(node.audioCodec === "none") {
+                // Disable audio
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-an']);
+            }
+            else {
                 // A typical audio re-encoding case is to AAC, so browsers can play the audio?
                 // Note that "-acodec" is the same as "-codec:a" or "-c:a"
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c:a', node.audioCodec]); // TODO bv aac
-            }                    
-            if(node.audioSampleRate) {
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-ar', node.audioSampleRate]); // TODO bv 44100
-            }
-            if(node.audioBitRate) {
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-b:a', node.audioBitRate]); // TODO bv 96K
-            }
-            //if(node.audioChannelCount) {
-            //    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-ac', node.audioChannelCount]); // TODO bv 96K
-            //}
-            if(node.videoCodec) {
-                // Note that "-vcodec" is the same as "-codec:v" or "-c:v"
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c:v', node.videoCodec]); // TODO bv libx264 (= default decoder for H.264)
-            }
-            if(node.videoWidth && node.videoHeight) { // resolution
-                // Note that "-video_size" is the same as "-s"
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-s', node.videoWidth + 'x' + node.videoHeight]);
-            }   
-            if(node.videoFrameRate) {
-                // Note that "-framerate" is the same as "-r"
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-r', node.videoFrameRate]);
-            }
-            if(node.videoBitRate) {
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-b:v', node.videoBitRate]); // TODO bv 500K
-            }                    
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c:a', node.audioCodec]);
 
-            if(node.videoQuality) {
-                // A low jpeg videoQuality factor means good videoQuality, resulting in higher bitrate.
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-q:v', node.videoQuality]);
+                if(node.audioSampleRate) {
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-ar', node.audioSampleRate]); // e.g. 44100
+                }
+
+                if(node.audioBitRate) {
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-b:a', node.audioBitRate]); // e.g. 96K
+                }
+
+                //if(node.audioChannelCount) {
+                //    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-ac', node.audioChannelCount]); // e.g. 96K
+                //}
+            }
+
+            if(node.videoCodec === "none") {
+                // Disable video
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vn']);
+            }
+            else {
+                // In case of a h264_mmal codec, an extra argument should be supplied
+                if(node.videoCodec === "h264_mmal") {
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-hwaccel', 'rpi']);
+                }
+
+                // Note that "-vcodec" is the same as "-codec:v" or "-c:v"
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c:v', node.videoCodec]);
+
+                if(node.videoWidth && node.videoHeight) { // resolution
+                    // Note that "-video_size" is the same as "-s"
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-s', node.videoWidth + 'x' + node.videoHeight]);
+                }
+
+                if(node.videoFrameRate) {
+                    // Note that "-framerate" is the same as "-r"
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-r', node.videoFrameRate]);
+                }
+
+                if(node.videoBitRate) {
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-b:v', node.videoBitRate]); // e.g. 500K
+                }                    
+
+                if(node.videoQuality) {
+                    // A low videoQuality factor means good videoQuality, resulting in higher bitrate.
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-q:v', node.videoQuality]);
+                }
+
+                // MP4 muxer options:
+                //  - frag_keyframe : start fragment at video keyframes (less performance overhead compared to frag_every_frame)
+                //  - frag_every_frame: start fragment at every frame
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-movflags', '+frag_keyframe+empty_moov+default_base_moof']);
+            
+                if(node.minFragDuration) {
+                    // The minimum duration of fragments (in milliseconds)
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-min_frag_duration', node.minFragDuration]);
+                }
+            }
+
+            ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:1']); // stdout
+
+            // ----------------------------------------------------------------------------------------------
+            // Output 'progress' (pipe 3) options
+            // ----------------------------------------------------------------------------------------------
+
+            // Only output statistic values when a statistics period (in seconds) has been specified
+            if(node.statisticsPeriod) {
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-stats_period', node.statisticsPeriod]);
+
+                // Progress information is written periodically and at the end of the encoding process.
+                // It is made of "key=value" lines. key consists of only alphanumeric characters.
+                // The last key of a sequence of progress information is always "progress".
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-progress']);
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:3']); // first additional pipe
             }
             
-            ffmpegCmdArgs = ffmpegCmdArgs.concat(['-movflags', '+frag_keyframe+empty_moov+default_base_moof']);
-            ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:1']); // stdout
-            
-            // Progress information is written periodically and at the end of the encoding process.
-            // It is made of "key=value" lines. key consists of only alphanumeric characters.
-            // The last key of a sequence of progress information is always "progress".
-            ffmpegCmdArgs = ffmpegCmdArgs.concat(['-progress']);
-            ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:3']); // first additional pipe
-            
-            if(config.jpegOutput == 'all_frames') { // This will consume a lot of CPU due to decoding the H.264 to Jpeg images
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']); // Send the output to a pipe (instead of to a file) to do everything in-memory 
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c', 'mjpeg']); // image2pipe will create individual images
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', 'fps=fps=4']);// Filtergraph containing an fps filter to give an output of 4 frames per second (TODO what is difference with -framerate?  https://stackoverflow.com/a/51224132  If the input FR drops below the CFR output, the 'fps' filter will repeat input frames in order to maintain CFR output.
+            // ----------------------------------------------------------------------------------------------
+            // Output 'jpeg' (pipe 4) options
+            // ----------------------------------------------------------------------------------------------
+
+            if(node.jpegOutput == 'all_frames') { // This will consume a lot of CPU due to decoding the H.264 to Jpeg images
+                // Send the output to a pipe (instead of to a file) to do everything in-memory 
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']);
+                // Instruct image2pipe to create individual images
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c', 'mjpeg']);
+                // Filtergraph containing an fps filter to give an output of 4 frames per second.
+                // If the input FR drops below the CFR output, the 'fps' filter will repeat input frames in order to maintain CFR output.  
+                // It is also possible to specify fractions (e.g. fps=fps=1/2).
+                // Note that vf is the same as -filter:v
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', 'fps=fps=4']);
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:4']);
             }
-            else if(config.jpegOutput == 'i_frames') {
+            else if(node.jpegOutput == 'i_frames') {
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']); // Send the output to a pipe (instead of to a file) to do everything in-memory 
-                // TODO de frame size instelbaar maken (select='eq(pict_type,PICT_TYPE_I)',scale=trunc(iw/4):-2)
+                // TODO adjustable frame rate (select='eq(pict_type,PICT_TYPE_I)',scale=trunc(iw/4):-2)
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', "select='eq(pict_type,PICT_TYPE_I)'"]);// Filtergraph to extract the I frames (= keyframes that contain all the data necessary for the image and are not interpolated), and dynamic scaling for 75 percent of the original input width and having the width and height divisible by 2 and keeping the aspect ratioCFR output.
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vsync', 'vfr']); // use variable frame rate to make sure the timestamps (of the extracted I frames) are still ok
             }
-            
-            if(config.jpegOutput == 'all_frames' || config.jpegOutput == 'i_frames') {
+
+            if(node.jpegOutput == 'all_frames' || node.jpegOutput == 'i_frames') {
                 if(node.jpegWidth && node.jpegHeight) { // resolution
                     // Note that "-video_size" is the same as "-s"
                     ffmpegCmdArgs = ffmpegCmdArgs.concat(['-s', node.jpegWidth + 'x' + node.jpegHeight]);
@@ -224,8 +292,7 @@
                 node.ffmpegProcess = null;
                 return;
             }
-            
-            // TODO do we need to replace 'on' by 'once' for the error events??
+
             node.ffmpegProcess.on('error', function(err) {
                 if (err.code === 'ENOENT') {
                     error.message = "Cannot find FFMpeg executable.";
@@ -243,7 +310,6 @@
             });
             
             // If the child process fails to spawn due to errors, then the pid is undefined (and an error event is emitted).
-            // TODO check whether the 'close' event is emitted in case of an error, so all cleanup is done
             if (!node.ffmpegProcess.pid) {
                 node.ffmpegProcess = null;
                 return;
@@ -259,6 +325,28 @@
                     clearTimeout(node.sigkillTimeout);
                 }
                 node.ffmpegProcess = null;
+                
+                // When there is a previous restart timer running, then stop it (to avoid having multiple timers running in parallel)
+                if(node.restartTimeout) {
+                    clearTimeout(node.restartTimeout);
+                }
+                
+                switch(node.restartPolicy) {
+                    case 'AFTER_PERIOD':
+                        node.restartTimeout = setTimeout(function() {
+                            startFFmpegProcess(null);
+                            node.restartTimeout = null;
+                        }, node.restartPeriod * 1000);
+                        break;
+                    case 'IMMEDIATE':
+                        startFFmpegProcess(null);
+                        break;
+                    case 'DISABLE':
+                        // No need to restart anything
+                        break;
+                    default:
+                        console.log('Unknown autostart policy: ' + node.restartPolicy);
+                }
             });
             
             // By registering to stdin errors, we can avoid uncatchable errors being thrown when the child process is abruptly closed during a large write operation
@@ -294,7 +382,6 @@
                 let pipeSocket = node.ffmpegProcess.stdio[i];
 
                 pipeSocket.on('error', function(err) {
-                    // TODO al deze errors ook op de output verzenden???
                     node.error("pipe " + i + " (" + pipes[i].name + ") error: " + err, msg);
                 });
 
@@ -306,11 +393,11 @@
             }
             
 
-            // Handle the data arriving on pipe 1 (which is the standard stdout)
+            // Handle the data arriving on pipe 1 (which is the standard stdout).
+            // This data might be only chunks of an mp4 segment, if the mp4 segments are larger than the OS pipe buffer size.
             let pipe1Socket = node.ffmpegProcess.stdio[1];
             pipe1Socket.on('data', function(data) {
                 if (data.length > 1) {
-                    // TODO combine the mp4 chunks into segments
                     node.send([{payload: data}, null, null, null]);
                 }
             });
@@ -392,8 +479,7 @@
                 return;
             }
 
-            // See the meaning of all exit codes (set by the child process): https://nodejs.org/api/process.html#process_exit_codes
-            // TODO lijkt alsof we nooit voorbij deze conditie geraken, en dus nooit het proces kunnen stoppen?  
+            // See the meaning of all exit codes (set by the child process): https://nodejs.org/api/process.html#process_exit_codes  
             if (node.ffmpegProcess.exitCode || node.ffmpegProcess.signalCode) {
                 node.warn("signal being processed already");
                 // Seems there is already a signal being processed at the moment
@@ -423,80 +509,30 @@
                 node.warn("The FFmpeg subprocess is stopping currently");
                 return;
             }
-            
-       
-/*
-[
-    "-loglevel",
-    "+level+fatal",
-    "-nostats",
-    "-rtsp_transport",
-    "tcp",
-    "-i",
-    "rtsp://admin:HSAdmin2FF@192.168.1.174:554/Streaming/Channels/101/",
-    "-f",
-    "mp4",
-    "-c:v",
-    "copy",
-    "-c:a",
-    "aac",
-    "-movflags",
-    "+frag_keyframe+empty_moov+default_base_moof",
-    "-metadata",
-    "title=my camera",
-    "pipe:1",
-    "-progress", // Progress information is written periodically and at the end of the encoding process. It is made of "key=value" lines. key consists of only alphanumeric characters. The last key of a sequence of progress information is always "progress".
-    "pipe:3",
-    "-f",
-    "image2pipe",
-    "-vf",
-    "select='eq(pict_type,PICT_TYPE_I)',scale=trunc(iw/4):-2", //Extract the I frames (= keyframes that contain all the data necessary for the image and are not interpolated), and dynamic scaling for 75 percent of the original input width and having the width and height divisible by 2 and keeping the aspect ratio
-    "-vsync",
-    "vfr", // use variable frame rate to make sure the timestamps (of the extracted I frames) are still ok
-    "pipe:4"
-]
-*/
-
-/*
-For h265 :  TODO build ffmpeg met --enable-gpl --enable-libx265
-
- 
- Zeker lezen!!!!!!!!!
- https://trac.ffmpeg.org/wiki/StreamingGuide
-
-allowed_media_types
-Set media types to accept from the server.
-‘video’
-‘audio’
-‘data’
-By default it accepts all media types.
-
-digest authentication
-
-
-When receiving data over UDP, the demuxer tries to reorder received packets (since they may arrive out of order, or packets may get lost totally). This can be disabled by setting the maximum demuxing delay to zero (via the max_delay field of AVFormatContext).
-
-This smearing is caused by "lost" RTP packets , specifically during reception of an I frame. FFMPEG's H.264 decoder does a really good job of concealing the occasional lost packet, but when losses occur during an I frame there's nothing the decoder can do.
-To fix the video smearing, add another value to the command to force ffmpeg to connect using tcp instead of the default udp. Of course, this will cause slightly more delay with video, but will ensure that the data is complete.
-
-*/
 
             try {
                 switch (msg.topic) {
                     case 'start':
                         startFFmpegProcess(msg);
+                        
+                        // When the child process has been explicit asked to start and it stops unexpectedly afterwards, it will 
+                        // need to restart automatically (if a restart period has been specified in the config screen)
+                        node.restartPolicy = 'AFTER_PERIOD';
                         break;
                     case 'stop':
                         stopFFmpegProcess(msg);
+                        
+                        // Since there is an explicit request to stop the ffmpeg child process, it is not allowed to automatically restart it again
+                        node.restartPolicy = 'DISABLE';
                         break;
                     case 'restart':
                         stopFFmpegProcess(msg);
-                        // TODO de vorige outputs terugzetten of parsen uit de command
-                        startFFmpegProcess(msg);
+                        
+                        // We will need to wait until the FFmpeg process has been stopped (or killed), and only then the FFmpeg child process can be started again
+                        node.restartPolicy = 'IMMEDIATE';
                         break;
                     case "version":
-// TODO require moet nog weg
-                        require("child_process").exec(node.ffmpegPath + ' -version', (error, stdout, stderr) => {
+                        exec(node.ffmpegPath + ' -version', (error, stdout, stderr) => {
                             if (error) {
                                 node.warn(`error: ${error.message}`);
                                 return;
@@ -512,15 +548,42 @@ To fix the video smearing, add another value to the command to force ffmpeg to c
                             // Extract the ffmpeg version number from the long string
                             //let ffmpegVersion = versionInfo.match(/ffmpeg version ([^ ]*) /)[1];
 
-                            node.send([null, { topic: "fmpeg_version", payload: versionInfo}, null, null]);
+                            node.send([null, { topic: "ffmpeg_version", payload: versionInfo}, null, null]);
+                        });
+                        break;
+                    case "demuxers":
+                    case "decoders":
+                    case "muxers":
+                    case "encoders":
+                    case "filters":
+                    case "hwaccels":
+                        exec(node.ffmpegPath + ' -hide_banner -' + msg.topic, (error, stdout, stderr) => {
+                            // Ignore the stderr, because it seems to contain the ffmpeg version info...
+                            if (error) {
+                                node.warn(`error: ${error.message}`);
+                                return;
+                            }
+                            
+                            let info = stdout.replace(/\r\n?|\n/g, '\n').split('\n');
+                            
+                            // When a payload contains a regex string, then only keep elements that match that regex
+                            if(msg.payload && (typeof msg.payload === 'string' || msg.payload instanceof String)) {
+                                const caseInsensitiveRegex = new RegExp(msg.payload, 'i');
+                                
+                                info = info.filter(element => {
+                                    return caseInsensitiveRegex.test(element);
+                                    return element.toLowerCase().includes(msg.payload.toLowerCase());
+                                });
+                            }
+
+                            node.send([null, { topic: "ffmpeg_" + msg.topic, payload: info}, null, null]);
                         });
                         break;
                     case "probe":
                         // The ffprobe.exe is located in the same directory as ffmpeg.exe
                         const ffprobePath = node.ffmpegPath.replace('ffmpeg.exe', 'ffprobe.exe');
                        
-// TODO require moet nog weg
-                        require("child_process").exec(ffprobePath + ' -hide_banner -i "' + node.rtspUrl + '"', (error, stdout, stderr) => {
+                        exec(ffprobePath + ' -hide_banner -i "' + node.rtspUrl + '"', (error, stdout, stderr) => {
                             if (error) {
                                 node.warn(`error: ${error.message}`);
                                 return;
@@ -571,7 +634,7 @@ To fix the video smearing, add another value to the command to force ffmpeg to c
         node.on('close', function(/*removed, done*/) {
             // Make sure the current running process is ended
             stopFFmpegProcess(null);
-            
+
             if (removed) {
                 // This node has been disabled/deleted
             }
