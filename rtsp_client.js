@@ -36,10 +36,10 @@
         this.audioSampleRate    = config.audioSampleRate;
         this.audioBitRate       = config.audioBitRate;
         this.transportProtocol  = config.transportProtocol;
-        this.jpegOutput         = config.jpegOutput;
-        this.jpegFrameRate      = config.jpegFrameRate;
-        this.jpegWidth          = config.jpegWidth;
-        this.jpegHeight         = config.jpegHeight;
+        this.imageSource         = config.imageSource;
+        this.imageFrameRate      = config.imageFrameRate;
+        this.imageWidth          = config.imageWidth;
+        this.imageHeight         = config.imageHeight;
         this.socketTimeout      = config.socketTimeout;
         this.maximumDelay       = config.maximumDelay;
         this.socketBufferSize   = config.socketBufferSize;
@@ -97,7 +97,7 @@
 
             if(node.socketTimeout) {
                 // Set the (TP) socket I/O timeout in microseconds
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-timeout', node.socketTimeout]);
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-stimeout', node.socketTimeout]);
             }
 
             if(node.maximumDelay) {
@@ -216,7 +216,7 @@
             // Output 'jpeg' (pipe 4) options
             // ----------------------------------------------------------------------------------------------
 
-            if(node.jpegOutput == 'all_frames') { // This will consume a lot of CPU due to decoding the H.264 to Jpeg images
+            if(node.imageSource == 'all_frames') { // This will consume a lot of CPU due to decoding the H.264 to Jpeg images
                 // Send the output to a pipe (instead of to a file) to do everything in-memory 
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']);
                 // Instruct image2pipe to create individual images
@@ -228,21 +228,21 @@
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', 'fps=fps=4']);
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:4']);
             }
-            else if(node.jpegOutput == 'i_frames') {
+            else if(node.imageSource == 'i_frames') {
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']); // Send the output to a pipe (instead of to a file) to do everything in-memory 
                 // TODO adjustable frame rate (select='eq(pict_type,PICT_TYPE_I)',scale=trunc(iw/4):-2)
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', "select='eq(pict_type,PICT_TYPE_I)'"]);// Filtergraph to extract the I frames (= keyframes that contain all the data necessary for the image and are not interpolated), and dynamic scaling for 75 percent of the original input width and having the width and height divisible by 2 and keeping the aspect ratioCFR output.
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vsync', 'vfr']); // use variable frame rate to make sure the timestamps (of the extracted I frames) are still ok
             }
 
-            if(node.jpegOutput == 'all_frames' || node.jpegOutput == 'i_frames') {
-                if(node.jpegWidth && node.jpegHeight) { // resolution
+            if(node.imageSource == 'all_frames' || node.imageSource == 'i_frames') {
+                if(node.imageWidth && node.imageHeight) { // resolution
                     // Note that "-video_size" is the same as "-s"
-                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-s', node.jpegWidth + 'x' + node.jpegHeight]);
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-s', node.imageWidth + 'x' + node.imageHeight]);
                 }
-                if(node.jpegFrameRate) {
+                if(node.imageFrameRate) {
                     // Note that "-framerate" is the same as "-r"
-                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-r', node.jpegFrameRate]);
+                    ffmpegCmdArgs = ffmpegCmdArgs.concat(['-r', node.imageFrameRate]);
                 }
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:4']);
             }
