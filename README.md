@@ -1,33 +1,52 @@
 # node-red-contrib-rtsp-client
 A Node-RED node that acts as an RTSP client (via Ffmpeg)
 
-install ffmpeg via npm: https://discourse.nodered.org/t/node-red-contrib-ffmpeg-spawn/44427/47?u=bartbutenaers (zie ook de post erna)
+## Install
+Run the following npm command in your Node-RED user directory (typically ~/.node-red):
+```
+npm install node-red-contrib-rtsp-client
+```
+
+***PREREQUISITE: FFmpeg needs to be installed on your system before you can use this node!!!!***
+
+## Support my Node-RED developments
+Please buy my wife a coffee to keep her happy, while I am busy developing Node-RED stuff for you ...
+
+<a href="https://www.buymeacoffee.com/bartbutenaers" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy my wife a coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+
+## Introduction
+
+### RTSP basics
+RTSP (Real-Time Streaming Protocol) is an application layer protocol designed for telecommunications and entertainment systems to control the delivery of multimedia data. While RTSP was originally intended to be used to deliver entertainment television, it is now mainly used in IP cameras.  RTSP can be compared to a TV remote control, because it can start/pause/stop the video and audio streams from the IP camera.
+
+![RTSP protocol](https://user-images.githubusercontent.com/14224149/171836791-53dac8ed-e82c-4cd5-8aeb-aa752cbf05c7.png)
+
+Since [FFmpeg](https://ffmpeg.org/ffmpeg.html) contains everything we need (RTSP demuxer, decoders, ...), this node will start FFmpeg in a child process as RTSP client.  By running FFmpeg in a child process, we avoid that the main Node-RED process becomes unresponsive (unless you hardware resources are not sufficient to handle all these computations of course...).
+
+### Use cases
+This node can be used to capture audio and video streams from your IP camera in your Node-RED flow.  Which means that the audio and video segments will arrive in your Node-RED flow, so these segments can be used for all kind of stuff:
+
++ Grab JPEG images from your stream to do image processing in the Node-Red flow (i.e. face recognition, object detection, license plate recognition, ...).
+
++ Convert the audio and video segments to a fragemented MP4 stream, because browsers cannot play directly RTSP streams:
+
+   ![image](https://user-images.githubusercontent.com/14224149/171839987-ab04d48d-04ba-4e6a-85fb-3e413baf6651.png)
+
+## Usage
 
 
-https://www.cctvcameraworld.com/what-is-rtsp/
 
-DONE
-https://discourse.nodered.org/t/how-to-display-cctv-camera-in-dashboard-rtsp/5860
-
-TODO
-https://discourse.nodered.org/t/beta-testing-nodes-for-live-streaming-mp4
-https://discourse.nodered.org/t/display-camera-ip-in-dashboard-and-store-video-in-raspberry
-https://discourse.nodered.org/t/how-to-build-a-video-surveillance-system-from-scratch/51077
-https://discourse.nodered.org/t/node-red-contrib-ffmpeg-spawn
-
-acodec=none
--filter:v
 -hwaccel rpi -c:v h264_mmal   (This uses the gpu for decoding, but there is no hwaccel for encoding the jpeg, so that is still done on the cpu.)
              One thing to mention about hardware acceleration decoding is that there is a limit on the size input of the video W x H. I think most cannot handle an input greater that 1080p and unfortunately ffmpeg will fail without giving a good error to describe the problem.  Gpu decoding is even trickier. Not all vf filters work with it, such as that pict type I thing
--vf fps=fps=1  Voor gewone frame rate ( you can use fractions for even less, such as fps=fps=1/2)
--an
+             
 you will not be able to use -c:v copy unless the video input is already encoded as h264.
-One thing I noticed is that the ffmpeg command needs a little tweak to smooth out the video. Add -re in front of the -i so that it reads at realtime instead of going too fast.
-Statistics moet je kunnen deactiveren
-Als de input hls is:   -f hls -http_multiple 1
-Goed opletten op verschil tussen deze twee flags: https://discourse.nodered.org/t/node-red-contrib-ffmpeg-spawn/44427/42?u=bartbutenaers
 
-ffmpeg -re -i http://192.168.0.237:8889/?action=stream -c:v libx264 -bsf:a aac_adtstoasc -f mp4 -movflags +frag_every_frame+empty_moov+default_base_moof -min_frag_duration 500000 pipe💯
+-metadata "title=hello bart
+-vf drawtext=text='%{localtime\\:%a %b %d %Y %H꞉%M꞉%S}':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=120:fontcolor=black:box=1:boxborderw=10:boxcolor=white@0.5
+
+https://trac.ffmpeg.org/wiki/StreamingGuide
+
+
 
 Shorten the segments to reduce the delay:
 https://discourse.nodered.org/t/beta-testing-nodes-for-live-streaming-mp4/33743/130?u=bartbutenaers
@@ -38,17 +57,9 @@ You are trying to stream jpegs, not mp4, for now. We have to fix the ffmpeg comm
 
 To fix the video smearing, add another value to the command to force ffmpeg to connect using tcp instead of the default udp. Of course, this will cause slightly more delay with video, but will ensure that the data is complete.  in case your camera does not support tcp only, would be to give a list of preferred connection types in order -rtsp_transport +tcp+http+udp+udp_multicast -rtsp_flags +prefer_tcp
 
-ffmpeg -demuxers | grep jpeg
-ffmpeg -decoders | grep jpeg
-ffmpeg -encoders | grep 264
-ffmpeg -muxers | grep mp4
-To see details about a specific a demuxer, decoder, muxer, encoder that you found in the list from running the previous commands, run a command like this:
+Zie complexity of audio visual content : https://journal.code4lib.org/articles/9128
 
-ffmpeg -h demuxer=mjpeg
-ffmpeg -h decoder=mjpeg
-ffmpeg -h encoder=libx264
-ffmpeg -h muxer=mp4
-And to clarify a bit, the demuxer/muxer is the format when using the -f param and the decoder/encoder is when using the -c:v param
+the demuxer/muxer is the format when using the -f param and the decoder/encoder is when using the -c:v param
 
 uitleg over muxing en copying: https://discourse.nodered.org/t/beta-testing-nodes-for-live-streaming-mp4/33743/17?u=bartbutenaers
 
@@ -154,3 +165,43 @@ test streams   https://github.com/kevinGodell/iptv/tree/master/channels
 Kunnen we hier iets voor voorzien??  https://discourse.nodered.org/t/monitoring-a-video-live-stream/45991
 
 Misschien wel een autostart voorzien?
+
+            
+
+/*
+For h265 :  TODO build ffmpeg met --enable-gpl --enable-libx265
+
+ 
+ Zeker lezen!!!!!!!!!
+ https://trac.ffmpeg.org/wiki/StreamingGuide
+
+allowed_media_types
+Set media types to accept from the server.
+‘video’
+‘audio’
+‘data’
+By default it accepts all media types.
+
+digest authentication
+
+
+When receiving data over UDP, the demuxer tries to reorder received packets (since they may arrive out of order, or packets may get lost totally). This can be disabled by setting the maximum demuxing delay to zero (via the max_delay field of AVFormatContext).
+
+This smearing is caused by "lost" RTP packets , specifically during reception of an I frame. FFMPEG's H.264 decoder does a really good job of concealing the occasional lost packet, but when losses occur during an I frame there's nothing the decoder can do.
+To fix the video smearing, add another value to the command to force ffmpeg to connect using tcp instead of the default udp. Of course, this will cause slightly more delay with video, but will ensure that the data is complete.
+
+*/
+
+q:v integer
+Quality factor. Lower is better. Higher gives lower bitrate. The following table lists bitrates when encoding akiyo_cif.y4m for various values of -q:v with -g 100:
+
+-q:v 1 1918 kb/s
+-q:v 2 1735 kb/s
+-q:v 4 1500 kb/s
+-q:v 10 1041 kb/s
+-q:v 20 826 kb/s
+-q:v 40 553 kb/s
+-q:v 100 394 kb/s
+-q:v 200 312 kb/s
+-q:v 400 266 kb/s
+-q:v 1000 237 kb/s
