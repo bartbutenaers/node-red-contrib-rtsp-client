@@ -36,10 +36,10 @@
             audioSampleRate: {value: null},
             audioBitRate: {value: null},
             transportProtocol: {value: "prefer_tcp"},
-            jpegOutput: {value: "none"},
-            jpegFrameRate: {value: null},
-            jpegWidth: {value: null},
-            jpegHeight: {value: null},
+            imageSource: {value: "none"},
+            imageFrameRate: {value: null},
+            imageWidth: {value: null},
+            imageHeight: {value: null},
             socketTimeout: {value: null},
             maximumDelay: {value: null},
             socketBufferSize: {value: null},
@@ -51,7 +51,7 @@
         },
         inputs:1,
         outputs:4,
-        outputLabels: ["data", "status", "statistics", "jpeg"],  // statistics corresponds to the ffmpeg 'progress'
+        outputLabels: ["data", "status", "statistics", "images"],  // statistics corresponds to the ffmpeg 'progress'
         icon: "font-awesome/fa-file-video-o",
         paletteLabel: "rtsp",
         label: function() {
@@ -100,8 +100,8 @@
                 label: "MP4 Audio"
             });
             node.tabs.addTab({
-                id: "node-rtsp-tab-jpeg",
-                label: "Jpeg"
+                id: "node-rtsp-tab-images",
+                label: "Images"
             });
             node.tabs.addTab({
                 id: "node-rtsp-tab-advanced",
@@ -226,25 +226,25 @@
                 <input type="number" id="node-input-audioBitRate" class="rtsp-audio-input">
             </div>
         </div>
-        <div id="node-rtsp-tab-jpeg" style="position: relative; margin-top: 30px;">
+        <div id="node-rtsp-tab-images" style="position: relative; margin-top: 30px;">
             <div class="form-row">
-                <label for="node-input-jpegOutput"><i class="fa fa-picture-o"></i> Jpeg output</label>
-                <select id="node-input-jpegOutput" style="width:70%;">
+                <label for="node-input-imageSource"><i class="fa fa-picture-o"></i> Images</label>
+                <select id="node-input-imageSource" style="width:70%;">
                     <option value="none">None</option> 
                     <option value="all_frames">All frames</option>
                     <option value="i_frames">I-frames</option>
                 </select>
             </div>
             <div class="form-row">
-                <label for="node-input-jpegFrameRate"><i class="fa fa-tachometer"></i> Frame rate</label>
-                <input type="number" id="node-input-jpegFrameRate">
+                <label for="node-input-imageFrameRate"><i class="fa fa-tachometer"></i> Frame rate</label>
+                <input type="number" id="node-input-imageFrameRate">
             </div>
             <div class="form-row">
-                <label for="node-input-jpegWidth"><i class="fa fa-arrows"></i> Resolution</label>
-                <span for="node-input-jpegWidth">width</span>
-                <input type="number" id="node-input-jpegWidth" style="width:80px">
-                <span for="node-input-jpegHeight" style="margin-left:20px;"> height</span>
-                <input type="number" id="node-input-jpegHeight" style="width:80px">
+                <label for="node-input-imageWidth"><i class="fa fa-arrows"></i> Resolution</label>
+                <span for="node-input-imageWidth">width</span>
+                <input type="number" id="node-input-imageWidth" style="width:80px">
+                <span for="node-input-imageHeight" style="margin-left:20px;"> height</span>
+                <input type="number" id="node-input-imageHeight" style="width:80px">
             </div>
         </div>
         <div id="node-rtsp-tab-advanced" style="position: relative; margin-top: 30px;">
@@ -269,5 +269,97 @@
 </script>
 
 <script type="text/x-red" data-help-name="rtsp-client">
+    <p>A Node-RED node that acts as an RTSP client (via Ffmpeg).</p>
+    
+    <h1>General</h1>
+    
+    <p><strong>FFmpeg path:</strong><br/>
+    The path to the ffmpeg executable.  This can be a full path, or simply <code>ffmpeg.exe</code> if this executable is in the system PATH.</p>
+    <p><strong>RTSP url:</strong><br/>
+    The url where the RTSP stream is being hosted.</p>
+    <p><strong>Username:</strong><br/>
+    The logon username in case of basic authentication.</p>
+    <p><strong>Password:</strong><br/>
+    The logon password in case of basic authentication.</p>
+    <p><strong>Protocol:</strong><br/>
+    The network transport protocol being used to transfer the packets:
+        <ul>
+            <li><i>Prefer TCP:</i> First try TCP, and if that fails then switch to UDP.</li>
+            <li><i>UDP:</i> Fast connection, but packets can get lost or out of order.</li>
+            <li><i>TCP:</i> Slower connection, but all packets arrive in order.</li>
+            <li><i>UDP multicast:</i> Point all clients to the single multicast IP address.</li>
+            <li><i>HTTP:</i> HTTP tunnel for RTSP across proxies.</li>
+        </ul>
+    </p>
+    <p><strong>Stats period:</strong><br/>
+    The time period between statistic output messages (in seconds).  Note that decimals are allowed (e.g. <code>2.5</code>).  When this field is empty, no statistics messages will be sent.</p>
+    <p><strong>Restart period:</strong><br/>
+    After which period (in seconds) the RTSP stream should restart, after an unexpected halt.  When this field is empty, the stream will not be restarted automatically.</p>
+    <p><strong>Auto start:</strong><br/>
+    When autostart is enabled, the RTSP stream will be started automatically when the flow is started or deployed.</p>
 
+    <h1>MP4 video</h1>
+
+    <p><strong>Codec:</strong><br/>
+    The decoder that will be used to decode the input video stream.</p>
+        <ul>
+            <li><i>No video:</i> The input video will be ignored, which means the output MP4 segments will not contain video.</li>
+            <li><i>Copy input codec:</i> The output video will have the same format as the input video (i.e. no re-encoding).</li>
+            <li><i>H.264:</i> The input video will be re-encoded to H.264.</li>
+            <li><i>H.265 (= HEVC):</i> The input video will be re-encoded to H.265.</li>
+            <li><i>H.264 OMX (GPU acceleration):</i> The input video will be re-encoded to H.264 via hardware acceleration.</li>
+            <li><i>H.264 MMAL (GPU acceleration RPI):</i> The input video will be re-encoded to H.264 via hardware acceleration on Raspberry.</li>
+        </ul>
+    </p>
+    <p><strong>Frame rate:</strong><br/>
+    The fps (frames per second) in the output video.  When this field is empty, the fps will not be changed (i.e. no re-encoding).</p>    
+    <p><strong>Resolution:</strong><br/>
+    The resolution of the output video, as width and height in pixels.  When this field is empty, the resolution will not be changed (i.e. no re-encoding).</p> 
+    <p><strong>Quality:</strong><br/>
+    A low quality factor means better quality video images, but that will result in a higher bitrate (kB/sec).  When this field is empty, the quality will not be changed (i.e. no re-encoding).</p> 
+    <p><strong>Min frag duration:</strong><br/>
+    Avoid mp4 fragments to be created that are shorter than this duration (in microseconds).  When this field is empty, the fragment duration will not be changed (i.e. no re-encoding).</p> 
+
+    <h1>MP4 audio</h1>
+
+    <p><strong>Codec:</strong><br/>
+    The decoder that will be used to decode the input audio stream.</p>
+        <ul>
+            <li><i>No audio:</i> The input audio will be ignored, which means the output MP4 segments will not contain audio.</li>
+            <li><i>Copy input codec:</i> The output audio will have the same format as the input audio (i.e. no re-encoding).</li>
+            <li><i>AAC:</i> Free AAC decoder.</li>
+            <li><i>AAC FDK (non-GPL):</i> AAC decoder not included in standard FFmpeg.</li>
+            <li><i>MP3:</i> MP3 decoder.</li>
+        </ul>
+    </p>
+    <p><strong>Sample rate:</strong><br/>
+    The audio sampling frequency.  When this field is empty, the sampling frequency will not be changed (i.e. no re-encoding).</p>     
+    <p><strong>Bit rate:</strong><br/>
+    The audio bit rate.  When this field is empty, the bit rate will not be changed (i.e. no re-encoding).</p>     
+
+    <h1>Images</h1>
+
+    <p><strong>Jpeg output:</strong><br/>
+    Specify how the jpeg output needs to be triggered.</p>
+        <ul>
+            <li><i>None:</i> No output messages should be sent, containing jpeg output images.</li>
+            <li><i>All frames:</i> For every frame in the input stream, a jpeg needs to be decoded.</li>
+            <li><i>I-frames:</i> Only the already complete I-frame jpeg imags will be extracted from the mp4 fragments (i.e. no decoding).</li>
+        </ul>
+    </p>
+    <p><strong>Frame rate:</strong><br/>
+    The fps (Frames Per Second) of the jpeg images.  When this field is empty, the frame rate will not be changed (i.e. no re-encoding).</p> 
+    <p><strong>Resolution:</strong><br/>
+    The resolution of the output jpeg images, as width and height in pixels.  When this field is empty, the resolution will not be changed (i.e. no re-encoding).</p> 
+
+    <h1>Advanced</h1>
+
+    <p><strong>Socket timeout:</strong><br/>
+    The socket TCP I/O timeout in micro seconds.  When this field is empty, the node will keep waiting for the RTSP stream to arrive.</p> 
+    <p><strong>Maximum delay:</strong><br/>
+    A low delay value will a.o. result in the re-ordering buffer to be skipped.</p>     
+    <p><strong>Socket buffer size:</strong><br/>
+    The maximum UDP socket receive buffer size in bytes.</p>    
+    <p><strong>Reorder queue size:</strong><br/>
+    The number of packets to buffer for handling of reordered packets.</p>    
 </script>
