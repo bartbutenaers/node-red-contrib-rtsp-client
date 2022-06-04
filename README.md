@@ -7,6 +7,8 @@ Run the following npm command in your Node-RED user directory (typically ~/.node
 npm install node-red-contrib-rtsp-client
 ```
 
+I would like to thank [Kevin Godell](https://github.com/kevinGodell) for sharing all his FFmpeg knowledge with the Node-RED community.  This node contains a lot of information that I learned from him.  Please have a look at his [node-red-contrib-ffmpeg-spawn](https://github.com/kevinGodell/node-red-contrib-ffmpeg-spawn) node if you want to do other stuff with FFmpeg in Node-RED.
+
 ***PREREQUISITE: FFmpeg needs to be installed on your system before you can use this node!!!!***
 
 ## Support my Node-RED developments
