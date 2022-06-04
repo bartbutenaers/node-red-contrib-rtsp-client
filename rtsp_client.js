@@ -319,7 +319,7 @@
                 node.debug("child process closed", msg);
                 node.processStatus = "STOPPED";
                 node.status({ fill: 'blue', shape: 'dot', text: "stopped" });
-                node.send([null, { topic: 'stopped', payload: node.ffmpegProcess.pid }, null, null]);
+                node.send([null, { topic: 'stopped', payload: { pid: node.ffmpegProcess.pid } }, null, null]);
                 // If there is a timer running (to kill the subprocess), then remove it because the process seems to have stopped already gracefully
                 if(node.sigkillTimeout) {
                     clearTimeout(node.sigkillTimeout);
@@ -333,10 +333,12 @@
                 
                 switch(node.restartPolicy) {
                     case 'AFTER_PERIOD':
-                        node.restartTimeout = setTimeout(function() {
-                            startFFmpegProcess(null);
-                            node.restartTimeout = null;
-                        }, node.restartPeriod * 1000);
+                        if(node.restartPeriod) {
+                            node.restartTimeout = setTimeout(function() {
+                                startFFmpegProcess(null);
+                                node.restartTimeout = null;
+                            }, node.restartPeriod * 1000);
+                        }
                         break;
                     case 'IMMEDIATE':
                         startFFmpegProcess(null);
@@ -640,6 +642,9 @@
         });
 
         node.on('close', function(/*removed, done*/) {
+            // The stopFFmpegProcess should not start a new timer (to restart the child process again)
+            node.restartPolicy = 'DISABLE';
+             
             // Make sure the current running process is ended
             stopFFmpegProcess(null);
 
