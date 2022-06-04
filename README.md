@@ -17,7 +17,7 @@ Please buy my wife a coffee to keep her happy, while I am busy developing Node-R
 ## Introduction
 
 ### RTSP basics
-RTSP (Real-Time Streaming Protocol) is an application layer protocol designed for telecommunications and entertainment systems to control the delivery of multimedia data. While RTSP was originally intended to be used to deliver entertainment television, it is now mainly used in IP cameras.  RTSP can be compared to a TV remote control, because it can start/pause/stop the video and audio streams from the IP camera.
+RTSP (Real-Time Streaming Protocol) is an application layer protocol designed to control the delivery of multimedia data. While RTSP was originally intended to be used to deliver entertainment television, it is now mainly used in IP cameras.  RTSP can be compared to a TV remote control, because it can start/pause/stop the video and audio streams from the IP camera.
 
 ![RTSP protocol](https://user-images.githubusercontent.com/14224149/171836791-53dac8ed-e82c-4cd5-8aeb-aa752cbf05c7.png)
 
@@ -40,22 +40,27 @@ This node can be used to capture audio and video streams from your IP camera in 
 ### General
     
 #### FFmpeg path
-The path to the ffmpeg executable.  This can be a full path, or simply `ffmpeg.exe` if this executable is in the system PATH.
+The path to the ffmpeg executable.  This can be a full path, or simply `ffmpeg.exe` if this executable is accessibel via the system PATH.
 
 #### RTSP url
-The url where the RTSP stream is being hosted.
+The url wia which the RTSP stream is accessible.  
+
+This url might be provided in the manual of your camera, on the website of your camera manufacturer.  If you can't find it there, you might have a look in the ISpy [database](https://www.ispyconnect.com/cameras/), which contains RTSP connection url' for a large amount of IP cameras.
 
 #### Username
-The logon username in case of basic authentication.
+The username used to login, in case basic authentication has been activated.
 
 #### Password
-The logon password in case of basic authentication.
+The password used to login, in case basic authentication has been activated.
 
 #### Protocol:
-The network transport protocol being used to transfer the packets:
+The network transport protocol being used to transfer the packets from the camera to this node:
+
 + ***Prefer TCP***: First try TCP, and if that fails then switch to UDP.
-+ ***UDP***: Fast connection, but packets can get lost or out of order.
-+ ***TCP***: Slower connection, but all packets arrive in order.
++ ***UDP***: UDP connections can deliver data fast, because network packets will never be retransmitted in case their get lost.
+   + This works fine e.g. for MJPEG streams, because there is only a small delay and only few pixels get lost. but packets can get lost or out of order.
+   + However for RTSP this can result in a lot of troubles, when packets get lost due to packets getting lost or arriving out of order.
++ ***TCP***: TCP connections will deliver all packets in the correct order.  However due to retransmission of packets, this will result in slower connections compared to UDP.  But after all this results in more stable RTSP connections
 + ***UDP multicast***: Point all clients to the single multicast IP address.
 + ***HTTP***: HTTP tunnel for RTSP across proxies.
 
@@ -63,10 +68,23 @@ The network transport protocol being used to transfer the packets:
 The time period between statistic output messages (in seconds).  Note that decimals are allowed (e.g. ``2.5`).  When this field is empty, no statistics messages will be sent.
 
 #### Restart period
-After which period (in seconds) the RTSP stream should restart, after an unexpected halt.  When this field is empty, the stream will not be restarted automatically.
+After which period (in seconds) the RTSP stream should be restarted automatically, after an unexpected halt has occurred:
+
+![image](https://user-images.githubusercontent.com/14224149/171939084-d07b7959-c826-4a65-9cc7-c6e7c823c7d8.png)
+
+When this field is empty, the stream will not be restarted automatically.
+
+If more complex restart mechanisms are required, you can implement this yourself.  See this (TODO) wiki page for an example.
 
 #### Auto start
-When autostart is enabled, the RTSP stream will be started automatically when the flow is started or deployed.
+When autostart is enabled, the RTSP stream will be started automatically when the flow is started or deployed.  
+
+Of course the same result can be achieved using an Inject node that automatically triggers a 'start' message when the flow is started:
+
+![image](https://user-images.githubusercontent.com/14224149/171997662-12392613-2092-4e0e-b16a-086f20277574.png)
+```
+[{"id":"836ed03a9b4640a6","type":"inject","z":"d9e13201faaf6e32","name":"autostart ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":true,"onceDelay":0.1,"topic":"start","x":1470,"y":320,"wires":[["fa819dde90fd31d5"]]},{"id":"fa819dde90fd31d5","type":"rtsp-client","z":"d9e13201faaf6e32","name":"","ffmpegPath":"ffmpeg.exe","rtspUrl":"rtsp://put_your_url_here","statisticsPeriod":"4","restartPeriod":"","autoStart":"disable","videoCodec":"libx264","videoFrameRate":"12","videoWidth":"320","videoHeight":"240","videoQuality":"","minFragDuration":"","audioCodec":"aac","audioSampleRate":"","audioBitRate":"","transportProtocol":"udp","imageSource":"i_frames","imageFrameRate":"","imageWidth":"","imageHeight":"","socketTimeout":"","maximumDelay":"","socketBufferSize":"","reorderQueueSize":"","x":1690,"y":320,"wires":[[],[],[],[]]},{"id":"3dfba994e4e4eed6","type":"inject","z":"d9e13201faaf6e32","name":"stop ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"stop","x":1490,"y":360,"wires":[["fa819dde90fd31d5"]]}]
+```
 
 ### MP4 video
 
@@ -88,8 +106,17 @@ The resolution of the output video, as width and height in pixels.  When this fi
 #### Quality
 A low quality factor means better quality video images, but that will result in a higher bitrate (kB/sec).  When this field is empty, the quality will not be changed (i.e. no re-encoding).
 
-#### >Min frag duration
-Avoid mp4 fragments to be created that are shorter than this duration (in microseconds).  When this field is empty, the fragment duration will not be changed (i.e. no re-encoding).
+Some example values (which will be different in other setups):
+
+| Quality factor  | Bit rate (kb/s) |
+| --------------- | --------------- |
+| 1               | 1918            |
+| 100             | 394             |
+| 400             | 266             |
+| 100 0           | 337             |
+
+#### Min frag duration
+To avoid that mp4 fragments will be created that are shorter than this duration (in microseconds).  When this field is empty, the fragment duration will not be changed (i.e. no re-encoding).
 
 ### MP4 audio
 
