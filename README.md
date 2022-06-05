@@ -58,6 +58,23 @@ Note however that there are different ways of working, depending on the use case
 
 + If *only once and a while* an image is required, you might be better of using simply a http-request node to get a snapshot image from your camera...
 
+The following example flow demonstrates the extraction of I-frames:
+
+![images flow](https://user-images.githubusercontent.com/14224149/172035578-8c0ada7b-06f4-4311-ad94-ff5b7c55fd88.png)
+```
+[{"id":"16c0a3f9f78a53d7","type":"inject","z":"d9e13201faaf6e32","name":"start ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"start","x":2210,"y":260,"wires":[["4c26ba8df942c4a2"]]},{"id":"c1b5f2a05e71929c","type":"inject","z":"d9e13201faaf6e32","name":"stop ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"stop","x":2210,"y":320,"wires":[["4c26ba8df942c4a2"]]},{"id":"68df2f4fd3353152","type":"image","z":"d9e13201faaf6e32","name":"","width":"150","data":"payload","dataType":"msg","thumbnail":false,"active":true,"pass":false,"outputs":0,"x":3100,"y":280,"wires":[]},{"id":"582561fd0de6b50c","type":"msg-speed","z":"d9e13201faaf6e32","name":"","frequency":"sec","interval":1,"estimation":false,"ignore":false,"pauseAtStartup":false,"topicDependent":false,"x":2570,"y":280,"wires":[[],["e0fe7536fe452bf0"]]},{"id":"456798304142ef2f","type":"image-info","z":"d9e13201faaf6e32","name":"","x":2910,"y":280,"wires":[["68df2f4fd3353152"]]},{"id":"e0fe7536fe452bf0","type":"msg-size","z":"d9e13201faaf6e32","name":"","frequency":"sec","interval":1,"statusContent":"avg","estimation":false,"ignore":false,"pauseAtStartup":false,"humanReadableStatus":true,"topicDependent":false,"x":2740,"y":280,"wires":[[],["456798304142ef2f"]]},{"id":"4c26ba8df942c4a2","type":"rtsp-client","z":"d9e13201faaf6e32","name":"","ffmpegPath":"C:\\Users\\Gebruiker\\ffmpeg\\ffmpeg-2022-05-16-git-e3580f6077-full_build\\bin\\ffmpeg.exe","rtspUrl":"rtsp://put_your_url_here","statisticsPeriod":"4","restartPeriod":"4","autoStart":"disable","videoCodec":"libx264","videoFrameRate":"12","videoWidth":"320","videoHeight":"240","videoQuality":"","minFragDuration":"","audioCodec":"aac","audioSampleRate":"","audioBitRate":"","transportProtocol":"udp","imageSource":"i_frames","imageFrameRate":"","imageWidth":"","imageHeight":"","socketTimeout":"","maximumDelay":"","socketBufferSize":"","reorderQueueSize":"","x":2410,"y":260,"wires":[[],[],[],["582561fd0de6b50c"]]}]
+```
+
+Note that this flow requires some extra nodes to be installed, in order to be able to get some information about the images:
+1. Start the RTSP stream, by injecting a 'start' message.
+2. The RTSP node will extract the I-frames from the compressed video stream.
+3. The [node-red-contrib-msg-speed](https://github.com/bartbutenaers/node-red-contrib-msg-speed) will measure the FPS, which depends on the I-frame interval on your camera and the frame rate configured in the "Images" tabsheet of the RTSP node.
+4. The [node-red-contrib-msg-size](https://github.com/bartbutenaers/node-red-contrib-msg-size) node will measure the average size of the JPEG images, which may depend on a lot of factors (video quality, bit rates, I-frame interval).
+5. The [node-red-contrib-image-info](https://github.com/bartbutenaers/node-red-contrib-image-info) node will show the image type and resolution.
+6. The [node-red-contrib-image-output](https://github.com/rikukissa/node-red-contrib-image-output) node will show a preview of the images.
+
+Most of these nodes can be removed as soon as everything is up and running, but can be useful while tweaking all the settings.
+
 ## Node properties
 
 ### General
