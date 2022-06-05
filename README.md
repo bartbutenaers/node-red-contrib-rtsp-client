@@ -36,6 +36,27 @@ This node can be used to capture audio and video streams from your IP camera in 
 
 ## Usage
 
+### Extract JPEG images
+The compressed video stream (e.g. H.264) will contain 3 types of images, as described in this moving Pac-Man picture from [wikipedia](https://en.wikipedia.org/wiki/Video_compression_picture_types):
+
+![frames](https://user-images.githubusercontent.com/14224149/172034652-49b96e5c-43f8-4afe-99f7-5dd892feb7f9.png)
+
++ ***I‑frame***: a complete JPEG image.
++ ***P‑frame*** (= delta‑frame): only contains the changes between the current frame and the previous frame (e.g. a moving car or persion).  Since it doesn't contain any unchanged background pixels, a lot of data can be compressed.
++ ***B‑frame***: only contains differences between the current frame and both the previous and following frames.  Which means it allows even more compression compared to a P-frame, since it will contain much less pixels.
+
+This node can extract JPEG images from the compressed video stream, to be able to execute ***image processing*** on those images in Node-RED (e.g. object detection, license plate recognition, ...), which will be send in the output messages on the 'Images' output.
+
+Note however that there are different ways of working, depending on the use case:
++ If *ALL images* need to be extracted from the video stream, you can use the ***ALL frames*** option.  However this means that all the P and B frames need to be decoded, to reconstruct the original complete JPEG images, which will result in high CPU and RAM consumption on your Node-RED server!
+
+   In this case it might be more efficient to get an MJPEG stream from you camera (e.g. using my [node-red-contrib-multipart-stream-decoder](https://github.com/bartbutenaers/node-red-contrib-multipart-stream-decoder), i.e. a continious stream of complete JPEG images.  Because then your Node-RED server won't have to do any decoding.  However that will result in much more network traffic (since there is only JPEG compression of individual images, but no compression between the images in the stream).  And not all modern camera's still support MJPEG streaming..
+
++ If *less images* are sufficient, then the ***"I-frames"*** option is much better.  In that case only the I-frames are extracted from the compressed video stream, which are already complete JPEG images (so no expensive decoding is required).  To reduce CPU usage even further, it is beneficial to lower the frame rate (FPS) to avoid to much images being extracted and processed.  
+
+   Note that the ***I-frame interval*** is adjustable on most camera's, so you can specify how often I-frames will be inserted by your camera in the compressed video stream. 
+
++ If *only once and a while* an image is required, you might be better of using simply a http-request node to get a snapshot image from your camera...
 
 ## Node properties
 
@@ -61,10 +82,12 @@ The network transport protocol being used to transfer the packets from the camer
 + ***Prefer TCP***: First try TCP, and if that fails then switch to UDP.
 + ***UDP***: UDP connections can deliver data fast, because network packets will never be retransmitted in case their get lost.
    + This works fine e.g. for MJPEG streams, because there is only a small delay and only few pixels get lost. but packets can get lost or out of order.
-   + However for RTSP this can result in a lot of troubles, when packets get lost due to packets getting lost or arriving out of order.
-+ ***TCP***: TCP connections will deliver all packets in the correct order.  However due to retransmission of packets, this will result in slower connections compared to UDP.  But after all this results in more stable RTSP connections
+   + However losing RTP packets can result in bad quality, most ofthen when this happens during reception of an I-frame. The H.264 decoder is good in concealing the occasional lost packet, but when losses occur during an I frame then ***'image smearing'*** will occur.
++ ***TCP***: TCP connections will deliver all packets in the correct order.  However due to retransmission of packets, this will result in slower connections compared to UDP.
 + ***UDP multicast***: Point all clients to the single multicast IP address.
 + ***HTTP***: HTTP tunnel for RTSP across proxies.
+
+Although TCP connections will introduce an extra delay (due to packet retransmissions), it is the preferred protocol to avoid artifacts (e.g. image smearing)!
 
 #### Stats period
 The time period between statistic output messages (in seconds).  Note that decimals are allowed (e.g. ``2.5`).  When this field is empty, no statistics messages will be sent.
@@ -93,11 +116,22 @@ Of course the same result can be achieved using an Inject node that automaticall
 #### Codec
 The decoder that will be used to decode the input video stream.
 + ***No video***: The input video will be ignored, which means the output MP4 segments will not contain video.
-+ ***Copy input codec***: The output video will have the same format as the input video (i.e. no re-encoding).
++ ***Copy input codec***: The output video will have the same format as the input video (i.e. no re-encoding), which can only be used in case the input video is H.264 already.
 + ***H.264***: The input video will be re-encoded to H.264.
 + ***H.265 (= HEVC)***: The input video will be re-encoded to H.265.
+   Note that FFmpeg needs to be build explicit to support H.265 decoding (... --enable-gpl --enable-libx265 ...).
 + ***H.264 OMX (GPU acceleration)***: The input video will be re-encoded to H.264 via hardware acceleration.
 + ***H.264 MMAL (GPU acceleration RPI)***: The input video will be re-encoded to H.264 via hardware acceleration on Raspberry.
+
+The most optimal scenario is that your camera stream contains H.264 video, because then then you *"Copy input codec"* to keep the AAC.  That way no re-encoding is required, so only few CPU and RAM is required on your Node-RED server.  And since all major browsers support H.264, you can easily display it (e.g. by converting it to framented MP4).
+
+Some modern camera's currently support H.265 which has much better video compression, compared to H.264.  Which means that network traffic is lower, and it will use much less disk space if you want to store recorded video.  So for these purpose H.265 will be a better choice.  However once you want to display that recorded H.265 in your browser, you will need to re-encode it to H.264 again.  Because at this moment no browser supports H.265 yet!  And the re-encoding will consume a lot of CPU and RAM on your Node-RED server...
+
+Some notes about *hardware acceleration*:
++ It is not useful if there is no re-encoding.
++ It not used for the individual jpeg images, because that is still done on the DPU (instead of on the GPU).
++ There is a limit on the size input of the video W x H for the CPU, otherwise FFmpeg will fail without a decent error description.
++ CPU decoding also has some limitations, e.g. not all FFmpeg filters work with it.
 
 #### Frame rate
 The fps (frames per second) in the output video.  When this field is empty, the fps will not be changed (i.e. no re-encoding).
@@ -130,6 +164,8 @@ The decoder that will be used to decode the input audio stream:
 + ***AAC FDK (non-GPL)***: AAC decoder not included in standard FFmpeg.
 + ***MP3***: MP3 decoder.
 
+The most optimal scenario is that your camera stream contains AAC audio (which is the successor of MP3), because then then you *"Copy input codec"* to keep the AAC.  That way no re-encoding is required, so only few CPU and RAM is required on your Node-RED server.  And since all major browsers support AAC, you can easily display it (e.g. by converting it to framented MP4).
+
 #### Sample rate
 The audio sampling frequency.  When this field is empty, the sampling frequency will not be changed (i.e. no re-encoding).
 
@@ -138,10 +174,10 @@ The audio bit rate.  When this field is empty, the bit rate will not be changed 
 
 ### Images
 
-#### Jpeg output
+#### Image source
 Specify how the jpeg output needs to be triggered:
 + ***None***: No output messages should be sent, containing jpeg output images.
-+ ***All frames***: For every frame in the input stream, a jpeg needs to be decoded.
++ ***All frames***: For every frame in the input stream, a jpeg will be decoded. 
 + ***I-frames***: Only the already complete I-frame jpeg imags will be extracted from the mp4 fragments (i.e. no decoding).
 
 #### Frame rate
@@ -163,3 +199,5 @@ The maximum UDP socket receive buffer size in bytes.
 
 #### Reorder queue size
 The number of packets to buffer for handling of reordered packets.
+
+When receiving data over UDP, the demuxer tries to reorder received packets, since they may arrive out of order (or packets may get lost totally). 
