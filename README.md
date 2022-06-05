@@ -36,6 +36,19 @@ This node can be used to capture audio and video streams from your IP camera in 
 
 ## Usage
 
+### RTSP stream statistics
+In the config screen it can be configured how often a statistics output message should be send on the "Statistics" output.  Such an output message contains all kind of statistical information about the RTSP stream:
+
+![statistic message](https://user-images.githubusercontent.com/14224149/172037582-900ae983-cba9-4027-866f-d2b689df5e28.png)
+
+The following example flow shows how to show the frame rate and bit rate as the status of two Debug nodes:
+
+![rtsp_statistics](https://user-images.githubusercontent.com/14224149/172037532-99bb77d3-3652-4eb4-8648-0b87495895f7.gif)
+```
+[{"id":"2ce4d3da7fe1bbf8","type":"inject","z":"d9e13201faaf6e32","name":"start ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"start","x":2810,"y":520,"wires":[["4c9b0bce27e74ed5"]]},{"id":"5659d40b7fac2c83","type":"inject","z":"d9e13201faaf6e32","name":"stop ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"stop","x":2810,"y":580,"wires":[["4c9b0bce27e74ed5"]]},{"id":"4c9b0bce27e74ed5","type":"rtsp-client","z":"d9e13201faaf6e32","name":"","ffmpegPath":"ffmpeg.exe","rtspUrl":"rtsp://put_your_url_here","statisticsPeriod":"1","restartPeriod":"4","autoStart":"disable","videoCodec":"libx264","videoFrameRate":"12","videoWidth":"320","videoHeight":"240","videoQuality":"","minFragDuration":"","audioCodec":"aac","audioSampleRate":"","audioBitRate":"","transportProtocol":"udp","imageSource":"i_frames","imageFrameRate":"","imageWidth":"","imageHeight":"","socketTimeout":"","maximumDelay":"","socketBufferSize":"","reorderQueueSize":"","x":3010,"y":520,"wires":[[],[],["d54c7532dd6191dd","448a95fdb88ccbaa","e094d20313fed347"],[]]},{"id":"d54c7532dd6191dd","type":"debug","z":"d9e13201faaf6e32","name":"FPS","active":true,"tosidebar":false,"console":false,"tostatus":true,"complete":"payload.fps","targetType":"msg","statusVal":"payload.fps","statusType":"auto","x":3210,"y":500,"wires":[]},{"id":"448a95fdb88ccbaa","type":"debug","z":"d9e13201faaf6e32","name":"Bitrate","active":true,"tosidebar":false,"console":false,"tostatus":true,"complete":"payload.bitrate","targetType":"msg","statusVal":"payload.bitrate","statusType":"auto","x":3210,"y":560,"wires":[]}]
+```
+But of course you can do all kind of other stuff with these statistics: show them in a graph, trigger an alarm when the frame rate drops below a threshold for some time interval, and so on...
+
 ### Extract JPEG images
 The compressed video stream (e.g. H.264) will contain 3 types of images, as described in this moving Pac-Man picture from [wikipedia](https://en.wikipedia.org/wiki/Video_compression_picture_types):
 
@@ -74,6 +87,8 @@ Note that this flow requires some extra nodes to be installed, in order to be ab
 6. The [node-red-contrib-image-output](https://github.com/rikukissa/node-red-contrib-image-output) node will show a preview of the images.
 
 Most of these nodes can be removed as soon as everything is up and running, but can be useful while tweaking all the settings.
+
+Remark: you can't compare the message speed with the frame rate (from the statistics output message), because the latter one is the frame rate in the compressed video...
 
 ### Get information about FFmpeg
 When you have setup FFmpeg, it might be useful to get some information about FFmpeg (version number, supported decoders, ...).  All that information can be collected via the FFmpeg command line interface, but that might be not easy to access (e.g. when running Node-RED in a Docker container).  Therefore this node allows you to get some basic information from FFmpeg, simply by injecting messages into this node.
