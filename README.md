@@ -61,9 +61,9 @@ The payload will contain the PID, i.e. the process id of the FFmpeg child proces
 ### Handling the audio/video segments
 Once an RTSP stream is started, this node will start sending output messages on the *"Data"* output.  These messages will contain ***MP4 containers***, containing audio and/or video chunks (as specified in the audio and video codecs in the config screen).
 
-CAUTION: the FFmpeg subprocess will pass those segments to this node via pipes.  However the OS will limit the length of the data buffer that can be transferred via a pipe, for example 65 Kbyte on Raspbian.  As a result this node will receive only chunks of data, instead of complete audio and video segments.  As a result, this node will store chunks of data into the MP4 containers.  This means that the MP4 containers (in the output messages) contain only chunks of audio and video segments, so those ***MP4 containers are not playable***!!!  Keep that in mind when e.g. you want to replay such mp4 files that have been recorded to disk...
+CAUTION: the FFmpeg subprocess will pass those segments to this node via pipes.  However the OS will limit the length of the data buffer that can be transferred via a pipe, for example 65 Kbyte on Raspbian.  As a result this node will receive only chunks of data, instead of complete audio and video segments.  As a result, this node will store chunks of data into the MP4 containers (called *'muxing'*).  This means that the MP4 containers (in the output messages) contain only chunks of audio and video segments, so those ***MP4 containers are not playable***!!!  Keep that in mind when e.g. you want to replay such mp4 files that have been recorded to disk...
 
-It is for example possible to convert the MP4 containers to fragmented MP4, to display the stream in the Node-RED dashboard:
+It is for example possible to convert the MP4 containers to fragmented MP4 (which is a cross browser compatible format), to display the stream in the Node-RED dashboard:
 
 ![fragmented mp4](https://user-images.githubusercontent.com/14224149/172045730-e5dc3b3d-89a1-45e3-ae4f-39da8af53518.png)
 ```
@@ -74,6 +74,7 @@ It is for example possible to convert the MP4 containers to fragmented MP4, to d
 1. The RTSP node sends output messages, containing MP4 containers (with chunked MP4 segments)
 2. The [node-red-contrib-mp4frag](https://github.com/kevinGodell/node-red-contrib-mp4frag)node which will convert the chunked MP4 segements to ***fragmented MP4***.
 3. The [node-red-contrib-ui-mp4frag](https://github.com/kevinGodell/node-red-contrib-ui-mp4frag) node will display the fragmented MP4 in the Node-RED dashboard.
+   Note that you can send an url (for the HLS playlist) to the ui-mp4frag node, so the hls.js player can play the hls.m3u8 file.  But that introduces a delay, which prevents us from implementing near-realtime viewing.  Therefore we will push the MP4 fragments (via socket.io) to the dashboard, which has a much smaller delay (i.e. only the delay of a single segment). 
 
 ### RTSP stream statistics
 In the config screen it can be configured how often a statistics output message should be send on the "Statistics" output.  Such an output message contains all kind of statistical information about the RTSP stream:
@@ -100,7 +101,7 @@ The compressed video stream (e.g. H.264) will contain 3 types of images, as desc
 This node can extract JPEG images from the compressed video stream, to be able to execute ***image processing*** on those images in Node-RED (e.g. object detection, license plate recognition, ...), which will be send in the output messages on the 'Images' output.
 
 Note however that there are different ways of working, depending on the use case:
-+ If *ALL images* need to be extracted from the video stream, you can use the ***ALL frames*** option.  However this means that all the P and B frames need to be decoded, to reconstruct the original complete JPEG images, which will result in high CPU and RAM consumption on your Node-RED server!
++ If *ALL images* need to be extracted from the video stream, you can use the ***ALL frames*** option.  However this means that all the P and B frames need to be decoded (using the H.264 codec) and then encoded to JPEG (using the mjpeg codec), which will result in high CPU and RAM consumption on your Node-RED server!
 
    In this case it might be more efficient to get an MJPEG stream from you camera (e.g. using my [node-red-contrib-multipart-stream-decoder](https://github.com/bartbutenaers/node-red-contrib-multipart-stream-decoder), i.e. a continious stream of complete JPEG images.  Because then your Node-RED server won't have to do any decoding.  However that will result in much more network traffic (since there is only JPEG compression of individual images, but no compression between the images in the stream).  And not all modern camera's still support MJPEG streaming..
 
@@ -222,7 +223,7 @@ Of course the same result can be achieved using an Inject node that automaticall
 #### Codec
 The decoder that will be used to decode the input video stream.
 + ***No video***: The input video will be ignored, which means the output MP4 segments will not contain video.
-+ ***Copy input codec***: The output video will have the same format as the input video (i.e. no re-encoding), which can only be used in case the input video is H.264 already.
++ ***Copy input codec***: The output video will have the same format as the input video (i.e. no re-encoding), which can only be used in case the input video is H.264 already.  So we simply copy the H.264 video segments from the RTSP stream into the MP4 containers.
 + ***H.264***: The input video will be re-encoded to H.264.
 + ***H.265 (= HEVC)***: The input video will be re-encoded to H.265.
    Note that FFmpeg needs to be build explicit to support H.265 decoding (... --enable-gpl --enable-libx265 ...).
@@ -270,7 +271,7 @@ The decoder that will be used to decode the input audio stream:
 + ***AAC FDK (non-GPL)***: AAC decoder not included in standard FFmpeg.
 + ***MP3***: MP3 decoder.
 
-The most optimal scenario is that your camera stream contains AAC audio (which is the successor of MP3), because then then you *"Copy input codec"* to keep the AAC.  That way no re-encoding is required, so only few CPU and RAM is required on your Node-RED server.  And since all major browsers support AAC, you can easily display it (e.g. by converting it to framented MP4).
+The most optimal scenario is that your camera stream contains AAC audio (which is the successor of MP3), because then then you *"Copy input codec"* to keep the AAC by stream copying.  That way no re-encoding is required, so only few CPU and RAM is required on your Node-RED server.  And since all major browsers support AAC, you can easily display it (e.g. by converting it to framented MP4).
 
 #### Sample rate
 The audio sampling frequency.  When this field is empty, the sampling frequency will not be changed (i.e. no re-encoding).
@@ -307,3 +308,34 @@ The maximum UDP socket receive buffer size in bytes.
 The number of packets to buffer for handling of reordered packets.
 
 When receiving data over UDP, the demuxer tries to reorder received packets, since they may arrive out of order (or packets may get lost totally). 
+
+## Troubleshooting
+
+### Image smearing
+An UDP buffer that is not big enough to hold an entire image I-frame, can result in ***image smearing***:
+
+![image smearing](https://user-images.githubusercontent.com/14224149/172066242-7a489dd7-5609-433f-ac05-b8f2d530fee0.png)
+
+The FFmpeg decoder tries to reconstruct the missing part of the I-frame, by repeating the last line of pixels until the bottom of the image.  This is clearly a disadvantage of using UDP (instead of TCP), since important packets might get lost...
+
+### Latency
+It is very annoying when the video in the dashboard has a large delay, because we would like to implement live viewing.  Take into account that a latency of 2 seconds is normal for an rtsp stream.  When playing fragmented MP4 via the hls.js player, a delay of 5 seconds is really the best you could achieve (so prefer socket.io for live streaming).
+
+The minimum real-time delay of video running in the browser will always be based on the segment duration. So, a segment duration of 10 seconds will mean that the real-time video playback will be delayed by that much time plus the time to transfer the video from server to client and start playing it.
+
+There can be a lot of issues that can result in larger delays.  Some tips to solve it:
+1. Reduce the *I-frame interval* in the web interface of your IP camera.  Because the camera will buffer all the frames until that time interval is reached, then it will compress the frames before the H.264 segment is send to this node.  
+
+   You could even try to set the I-frame interval (sometimes called GOP) to the lowest setting allowed.  Because when stream 'copying' is selected, the I-frame interval setting will have a direct effect on the MP4 segment duration (and we need short MP4 segments for live streaming).  For example:
+   
+   If FPS = 20 and I-frame interval = 40 => MP4 segments length = 2 seconds
+   
+   Caution: when the I-frame interval is shortened, the compression won't be optimal again (resulting in larger frame size and lower quality)!
+
+2. Reduce the byte size of the segments.  When the bitrate is higher, this will result in bigger MP4 segments (which will take more time to travel across the network).  Therefore try to lower the quality settings to the least acceptable. Adjust this setting over and over again to get the most ooptimal setup.
+MP4.
+
+### No video in the dashboard
+1. Try to use a third party multimedia player (e.g. VLC), an try to connect to the camera rtsp url 
+2. Try to use a third party multimedia player (e.g. VLC), an try to connect to the hls.m3u8 playlist and see how that compares to the browser. 
+
