@@ -75,6 +75,41 @@ Note that this flow requires some extra nodes to be installed, in order to be ab
 
 Most of these nodes can be removed as soon as everything is up and running, but can be useful while tweaking all the settings.
 
+### Get information about FFmpeg
+When you have setup FFmpeg, it might be useful to get some information about FFmpeg (version number, supported decoders, ...).  All that information can be collected via the FFmpeg command line interface, but that might be not easy to access (e.g. when running Node-RED in a Docker container).  Therefore this node allows you to get some basic information from FFmpeg, simply by injecting messages into this node.
+
+The following example flow demonstrates this:
+
+![FFmpeg info](https://user-images.githubusercontent.com/14224149/172036051-7533349f-d09a-4570-acfd-c4a755c6f1ad.png)
+```
+[{"id":"68b67c2de809273d","type":"inject","z":"d9e13201faaf6e32","name":"ffmpeg version","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"version","x":2100,"y":620,"wires":[["fa1fb5de9409be66"]]},{"id":"fa1fb5de9409be66","type":"rtsp-client","z":"d9e13201faaf6e32","name":"","ffmpegPath":"ffmpeg.exe","rtspUrl":"rtsp://put_your_url_here","statisticsPeriod":"4","restartPeriod":"4","autoStart":"disable","videoCodec":"libx264","videoFrameRate":"12","videoWidth":"320","videoHeight":"240","videoQuality":"","minFragDuration":"","audioCodec":"aac","audioSampleRate":"","audioBitRate":"","transportProtocol":"udp","imageSource":"i_frames","imageFrameRate":"","imageWidth":"","imageHeight":"","socketTimeout":"","maximumDelay":"","socketBufferSize":"","reorderQueueSize":"","x":2290,"y":680,"wires":[[],["00603e3877df27b9"],[],[]]},{"id":"00603e3877df27b9","type":"debug","z":"d9e13201faaf6e32","name":"FFmpeg info","active":true,"tosidebar":true,"console":false,"tostatus":true,"complete":"true","targetType":"full","statusVal":"topic","statusType":"msg","x":2470,"y":680,"wires":[]},{"id":"44d6ad3169de2956","type":"inject","z":"d9e13201faaf6e32","name":"probe","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"probe","x":2130,"y":740,"wires":[["fa1fb5de9409be66"]]},{"id":"bab7b740de8435dc","type":"inject","z":"d9e13201faaf6e32","name":"demuxers","props":[{"p":"topic","vt":"str"},{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"demuxers","payload":"mp4","payloadType":"str","x":2120,"y":680,"wires":[["fa1fb5de9409be66"]]}]
+```
+1. Get the ***ffmpeg version*** by injecting a message with topic *"version"*.  The output message will not only contain the version number, but also which options were enabled when this version was build, and the versions of the major ffmpeg libraries being included in this build:
+
+   ![ffmpeg version](https://user-images.githubusercontent.com/14224149/172036228-c610b2a1-5cc6-4e7d-b29b-dbc516d0554e.png)
+   
+2. Get the available ***demuxers*** from the installed FFmpeg build, by injecting a message with topic *"demuxers"*.  This is very useful to find out whether your FFmpeg supports what you need.  Note that the topic can also contain "decoders", "muxers", "encoders", "filters" and "hwaccels".  
+
+   Moreover when a text is added in the message payload, this will act as a filter (i.e. the output message will only contain results containing that text).  For example suppose you want to decode a H.265 stream, but it doesn't work.  First thing you need to do is to verify whether your FFmpeg build supports H.265.  You can do that by injecting folliwng message:
+   ```
+   payload: "H.26",
+   topic: "decoders"
+   ```
+   
+   The ouput message will contain all available decoders named "xxxxH.26xxxxx":
+   
+   ![available decoders](https://user-images.githubusercontent.com/14224149/172036809-01efd295-6373-4d22-ae96-86b61a44b9da.png)
+
+   Now it is immediately clear that your FFmpeg build doesn't support H.265 decoding. So you will need to use H.264 or start a custom build, where you will need to enable H.265.
+
+3. Start a ***probe*** if you want information about your RTSP stream.  By injecting a message with topic *"probe"*, the FFprobe executable will be called to collect information about your RTSP stream:
+
+   ![image](https://user-images.githubusercontent.com/14224149/172036887-686bb57a-179e-47f9-9b72-d8579f8597fa.png)
+   
+   This is very useful to make sure your RTSP stream contains the correct audio and video format.  When the output is not what you had expected, you might need to login in the web interface of your camera, to adjust the stream settings.
+
+Note that all these output messages will appear on the "Status" output, although those messages don't contain status information.  I did this to avoid needing to have yet another output, and you problably won't need FFmpeg info often (i.e. only for troubleshooting in case of problems).
+
 ## Node properties
 
 ### General
