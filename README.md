@@ -1,5 +1,7 @@
 # node-red-contrib-rtsp-client
-A Node-RED node that acts as an RTSP client (via Ffmpeg)
+A Node-RED node that acts as an RTSP client (via Ffmpeg).
+
+This node allows you to control an RTSP stream from an IP cam, to capture the audio and video segments in Node-RED.  This will be achieved by starting FFmpeg in a child process.  This node will compose the required FFmpeg command line parameter list under the hood, based on settings entered in the config screen.
 
 ## Install
 Run the following npm command in your Node-RED user directory (typically ~/.node-red):
@@ -35,6 +37,26 @@ This node can be used to capture audio and video streams from your IP camera in 
    ![image](https://user-images.githubusercontent.com/14224149/171839987-ab04d48d-04ba-4e6a-85fb-3e413baf6651.png)
 
 ## Usage
+
+### Controlling an RTSP stream
+You can control an RTSP stream by injecting messages with topic *"stop"*, *"start"*, *"restart"*.  
+
+The following flow demonstrates how to do this:
+
+![control_rtsp_stream](https://user-images.githubusercontent.com/14224149/172038160-2b910686-d06d-40d6-b9aa-497af65b9dde.gif)
+```
+[{"id":"5ea47c6539af6672","type":"inject","z":"d9e13201faaf6e32","name":"start ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"start","x":2250,"y":920,"wires":[["7ae72da519e1869a"]]},{"id":"6c121924fac05805","type":"inject","z":"d9e13201faaf6e32","name":"stop ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"stop","x":2250,"y":980,"wires":[["7ae72da519e1869a"]]},{"id":"967a5b6efb3b6cd0","type":"inject","z":"d9e13201faaf6e32","name":"restart ffmpeg process","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"restart","x":2240,"y":1040,"wires":[["7ae72da519e1869a"]]},{"id":"7ae72da519e1869a","type":"rtsp-client","z":"d9e13201faaf6e32","name":"","ffmpegPath":"ffmpeg.exe","rtspUrl":"rtsp://put_your_url_here","statisticsPeriod":"4","restartPeriod":"4","autoStart":"disable","videoCodec":"libx264","videoFrameRate":"12","videoWidth":"320","videoHeight":"240","videoQuality":"","minFragDuration":"","audioCodec":"aac","audioSampleRate":"","audioBitRate":"","transportProtocol":"udp","imageSource":"i_frames","imageFrameRate":"","imageWidth":"","imageHeight":"","socketTimeout":"","maximumDelay":"","socketBufferSize":"","reorderQueueSize":"","credentials":{},"x":2450,"y":920,"wires":[[],["205a50453bbe5842"],[],[]]},{"id":"205a50453bbe5842","type":"debug","z":"d9e13201faaf6e32","name":"Status","active":true,"tosidebar":true,"console":false,"tostatus":true,"complete":"true","targetType":"full","statusVal":"topic","statusType":"msg","x":2610,"y":920,"wires":[]}]
+```
+
+In case of a restart, the stream will first be stopped and then started again (as soon as the stream is stopped completely).  This much more convenient compared to send successive stop and start messages yourself, because in that case you would have to watch the status (and only send the start as soon as the stream has been stopped).
+
+A ***status message*** will be send on the *"Status"* output, every time the status of the stream changes:
+
+![status updates](https://user-images.githubusercontent.com/14224149/172038031-7fa60387-886e-412c-ba74-518593a2a546.png)
+
+The payload will contain the PID, i.e. the process id of the FFmpeg child process.  That is the same PID as you will see appearing in the node status.  Note that the "started" status message will also contain the generated FFmpeg ***command line arguments*** (which might be useful to analyze to understand how this node communicates with FFmpeg):
+
+![start status message](https://user-images.githubusercontent.com/14224149/172038363-c3038a17-a120-4f89-909b-b75ae2443a6f.png)
 
 ### RTSP stream statistics
 In the config screen it can be configured how often a statistics output message should be send on the "Statistics" output.  Such an output message contains all kind of statistical information about the RTSP stream:
