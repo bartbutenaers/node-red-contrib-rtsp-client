@@ -81,11 +81,12 @@
             // Make sure the progress is clear and parsable (see https://superuser.com/a/1460400)
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-nostats']);
 
-            // The format of the input stream should be rtsp
+            // The format of the input stream should be rtsp (i.e. the demuxer format)
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'rtsp']);
 
             if(node.transportProtocol == 'prefer_tcp') {
                 // Try TCP first and automatically fallback to UDP if it fails
+                // TODO perhaps we need to extend this to something like this: -rtsp_transport +tcp+http+udp+udp_multicast -rtsp_flags +prefer_tcp
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-rtsp_transport', 'tcp']);
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-rtsp_flags', 'prefer_tcp']);
             }
@@ -162,7 +163,7 @@
                     ffmpegCmdArgs = ffmpegCmdArgs.concat(['-hwaccel', 'rpi']);
                 }
 
-                // Note that "-vcodec" is the same as "-codec:v" or "-c:v"
+                // Note that "-vcodec" is the same as "-codec:v" or "-c:v" (and specifies the video decoder
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-c:v', node.videoCodec]);
 
                 if(node.videoWidth && node.videoHeight) { // resolution
@@ -193,6 +194,10 @@
                     // The minimum duration of fragments (in milliseconds)
                     ffmpegCmdArgs = ffmpegCmdArgs.concat(['-min_frag_duration', node.minFragDuration]);
                 }
+                
+                // TODO allow a title to be set:
+                //  -metadata "title=hello bart"
+                //  -vf drawtext=text='%{localtime\\:%a %b %d %Y %H꞉%M꞉%S}':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=120:fontcolor=black:box=1:boxborderw=10:boxcolor=white@0.5
             }
 
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:1']); // stdout
@@ -445,7 +450,10 @@
                     else {
                         // An image can be composed of one or multiple chunk when receiving stream data.
                         // Indeed the ffmpeg's pipe2image produces images which will be feed into Node-RED via a pipe.
-                        // However the pipe buffer is limited by OS constraints, e.g. 65 Kbyte on a Raspberry Pi.
+                        // However the pipe buffer is limited by OS constraints:
+                        //   - mac: 8192
+                        //   - linux: 65536 (or 32000)
+                        //   - windows: ~90000
                         // When an individual jpeg size exceeds the OS buffer limitation, the image is splitted into chunks.
                         // Therefore we will join the chunks together again to recreate the images from the chunks.
                         if(!node.pipe2jpeg) {
