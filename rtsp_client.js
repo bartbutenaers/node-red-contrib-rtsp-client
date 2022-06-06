@@ -652,9 +652,11 @@
         node.on('close', function(/*removed, done*/) {
             // The stopFFmpegProcess should not start a new timer (to restart the child process again)
             node.restartPolicy = 'DISABLE';
-             
-            // Make sure the current running process is ended
-            stopFFmpegProcess(null);
+            
+            if(node.processStatus === "RUNNING") {
+                // Make sure the current running process is ended
+                stopFFmpegProcess(null);
+	    }
 
             if (removed) {
                 // This node has been disabled/deleted
