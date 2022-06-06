@@ -316,7 +316,9 @@ An UDP buffer that is not big enough to hold an entire image I-frame, can result
 
 ![image smearing](https://user-images.githubusercontent.com/14224149/172066242-7a489dd7-5609-433f-ac05-b8f2d530fee0.png)
 
-The FFmpeg decoder tries to reconstruct the missing part of the I-frame, by repeating the last line of pixels until the bottom of the image.  This is clearly a disadvantage of using UDP (instead of TCP), since important packets might get lost...
+If you're using a lossy transport (like UDP) then an I-frame represents "the next change it will have to repair the stream" if there are problems from packet loss.  So if the I-frame itself is incomplete (due to missing packets), then there is nothing more the FFmpeg decoder can do unfortunately.  The FFmpeg decoder tries to reconstruct the missing part of the I-frame, by repeating the last line of pixels until the bottom of the image. 
+
+These unwanted artifacts are a disadvantage of using UDP (instead of TCP), since important packets might get lost.
 
 ### Latency
 It is very annoying when the video in the dashboard has a large delay, because we would like to implement live viewing.  Take into account that a latency of 2 seconds is normal for an rtsp stream.  When playing fragmented MP4 via the hls.js player, a delay of 5 seconds is really the best you could achieve (so prefer socket.io for live streaming).
@@ -334,6 +336,22 @@ There can be a lot of issues that can result in larger delays.  Some tips to sol
 
 2. Reduce the byte size of the segments.  When the bitrate is higher, this will result in bigger MP4 segments (which will take more time to travel across the network).  Therefore try to lower the quality settings to the least acceptable. Adjust this setting over and over again to get the most ooptimal setup.
 MP4.
+
+3. Try to use a decoder that decodes more quickly.  The most optimal setup is an IP camera that offers a stream with H.264 for video and AAC for audio.  Then you can select to 'copy' the audio and video in this node, so no-reencoding is required.
+
+4. Try UDP (instead of TCP) for the transport protocol.  This might introduce artifiacts in your video, but then at least you know that the latency might be caused due to the TCP retransmission of packets, which means you have some network issues. 
+
+6. When the ***startup latency*** is slow, this might indicate that the I-frame interval setting on your camera is too big.  The camera will only send the first segment, when the I-frame interval is reached.  So it needs an I-frame before it can start compressing the fragment.
+
+7. Try to increase the frame rate to decrease latency.  This way packets will be sent more frequently, and it also helps FFmpeg to fill its internal buffers more quickly.  Note that the I-frame frequency will also increase, which will consume much more network bandwidth. (which affects throughput and also i-frame frequency, of course). 
+
+### High CPU usage
+
+1. Try to avoid having to decode the audio and video.  The most optimal setup is an IP camera that offers a stream with H.264 for video and AAC for audio.  Then you can select to 'copy' the audio and video in this node, so no-reencoding is required.
+
+2. Try to lower the frame rate and frame resolution on your IP camera (for which your quality is still acceptable), so less data needs to be handled by this node.  If you can't lower it in your IP camera for some reasons, you can lower it in this node.  But that way of course re-encoding will be executed, resulting in much more CPU again.  So best way is to adjust this in the IP camera.
+
+3. Try configure a pixel format in your IP camera, that matches your output format to avoid re-encoding.
 
 ### No video in the dashboard
 1. Try to use a third party multimedia player (e.g. VLC), an try to connect to the camera rtsp url 
