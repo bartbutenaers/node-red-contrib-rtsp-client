@@ -18,6 +18,9 @@ Please buy my wife a coffee to keep her happy, while I am busy developing Node-R
 
 <a href="https://www.buymeacoffee.com/bartbutenaers" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy my wife a coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
+## In case of issues
+When you have troubles with your audio or video, please take into account that I am NOT an FFmpeg specialist.  So in that case please start a discussion in the Node-RED [forum](https://discourse.nodered.org/) first, where you can mention me to get my attention.  And add that link to your Github issue in this repository.  As soon as we found a solution with the help of the community, I will adjust the code or the readme page of this Github repository.
+
 ## Introduction
 
 ### RTSP basics
