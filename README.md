@@ -175,7 +175,10 @@ The path to the ffmpeg executable.  This can be a full path, or simply `ffmpeg.e
 #### RTSP url
 The url wia which the RTSP stream is accessible.  
 
-This url might be provided in the manual of your camera, on the website of your camera manufacturer.  If you can't find it there, you might have a look in the ISpy [database](https://www.ispyconnect.com/cameras/), which contains RTSP connection url' for a large amount of IP cameras.
+It is not always obvious where to get this url.  Some tips:
++ Search in the manual of your IP camera.
++ Search in ISpy [cam url database](https://www.ispyconnect.com/cameras/), which contains RTSP connection url' for a large amount of IP cameras.
++ Install my Onvif nodes (via command line!) an ask the URL directly from your camera, via [this](https://github.com/bartbutenaers/node-red-contrib-onvif-nodes#stream-urls) example flow. 
 
 #### Username
 The username used to login, in case basic authentication has been activated.
