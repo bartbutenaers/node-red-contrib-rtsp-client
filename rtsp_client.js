@@ -19,15 +19,17 @@
     const Pipe2Jpeg = require('pipe2jpeg');
     const { exec, spawn, ChildProcess } = require('child_process');
     
+    // TODO perhaps ever add overlay images (https://stackoverflow.com/questions/65613083/i-am-using-ffmpeg-to-overlay-a-image-on-top-of-a-live-stream-using-filter-graphs)
+    
     function RtspClientNode(config) {
         RED.nodes.createNode(this, config);
         this.ffmpegPath         = config.ffmpegPath.trim();
         this.rtspUrl            = config.rtspUrl;
-        this.statisticsPeriod   = config.statisticsPeriod;
+        this.statisticsInterval = config.statisticsInterval;
         this.restartPeriod      = config.restartPeriod;
         this.autoStart          = config.autoStart;
         this.videoFrameRate     = config.videoFrameRate;
-	    this.videoWidth         = config.videoWidth;
+        this.videoWidth         = config.videoWidth;
         this.videoHeight        = config.videoHeight;
         this.videoQuality       = config.videoQuality;
         this.minFragDuration    = config.minFragDuration;
@@ -36,10 +38,10 @@
         this.audioSampleRate    = config.audioSampleRate;
         this.audioBitRate       = config.audioBitRate;
         this.transportProtocol  = config.transportProtocol;
-        this.imageSource         = config.imageSource;
-        this.imageFrameRate      = config.imageFrameRate;
-        this.imageWidth          = config.imageWidth;
-        this.imageHeight         = config.imageHeight;
+        this.imageSource        = config.imageSource;
+        this.imageFrameRate     = config.imageFrameRate;
+        this.imageWidth         = config.imageWidth;
+        this.imageHeight        = config.imageHeight;
         this.socketTimeout      = config.socketTimeout;
         this.maximumDelay       = config.maximumDelay;
         this.socketBufferSize   = config.socketBufferSize;
@@ -48,6 +50,7 @@
         this.processStatus      = "STOPPED";
         this.jpegChunks         = [];
         this.restartPolicy      = 'DISABLE';
+        this.errors             = {};
         
         var node = this;
         
@@ -98,7 +101,10 @@
 
             if(node.socketTimeout) {
                 // Set the (TP) socket I/O timeout in microseconds
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-stimeout', node.socketTimeout]);
+                // Using 'stimeout' results for some reason into '[fatal] Error splitting the argument list' (on a very up-to-date ffmpeg version...).
+                // In recent ffmpeg versions 'timeout' is NOT only used anymore for listening mode (see https://trac.ffmpeg.org/ticket/2294)!
+                // Therefore we use '-timeout' instead of '-stimeout'.
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-timeout', node.socketTimeout]);
             }
 
             if(node.maximumDelay) {
@@ -207,8 +213,8 @@
             // ----------------------------------------------------------------------------------------------
 
             // Only output statistic values when a statistics period (in seconds) has been specified
-            if(node.statisticsPeriod) {
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-stats_period', node.statisticsPeriod]);
+            if(node.statisticsInterval) {
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-stats_period', node.statisticsInterval]);
 
                 // Progress information is written periodically and at the end of the encoding process.
                 // It is made of "key=value" lines. key consists of only alphanumeric characters.
@@ -305,13 +311,17 @@
                 
                 node.error("child process error: " + err, msg);
                 node.status({ fill: 'red', shape: 'dot', text: err.toString() });
-                node.send([null, { topic: 'process error', payload: err.toString() }, null, null]);
+                
+                // Remeber the error (under the 'process' section) to send it later on via the 'stopped' output message
+                node.errors.process = err.toString();
             });
             
             node.ffmpegProcess.on('uncaughtException', function (err) {
                 node.error("child process uncaucht error: " + err, msg);
                 node.status({ fill: 'red', shape: 'dot', text: err.toString() });
-                node.send([null, { topic: 'uncaught process error', payload: err.toString() }, null, null]);
+                
+                // Remeber the error (under the 'process' section) to send it later on via the 'stopped' output message
+                node.errors.process = err.toString();
             });
             
             // If the child process fails to spawn due to errors, then the pid is undefined (and an error event is emitted).
@@ -322,9 +332,39 @@
             
             node.ffmpegProcess.on('close', function(code, signal) {
                 node.debug("child process closed", msg);
-                node.processStatus = "STOPPED";
                 node.status({ fill: 'blue', shape: 'dot', text: "stopped" });
-                node.send([null, { topic: 'stopped', payload: { pid: node.ffmpegProcess.pid } }, null, null]);
+                
+                var outputMessage = {
+                    topic: 'stopped',
+                    payload: {
+                        pid: node.ffmpegProcess.pid,
+                        reason: "unknown"
+                    }
+                } 
+                
+                // Determine the reasson why the child process was stopped
+                if(node.processStatus === "STOPPING" || node.processStatus === "TERMINATING") {
+                    // Normal stop requested via an input message
+                    outputMessage.payload.reason = "input msg";
+                }
+                else {
+                    if(Object.keys(node.errors).length > 0) {
+                        outputMessage.payload.reason = "error";
+                        // Include in th output message all the errors that have been registered
+                        outputMessage.payload.errors = node.errors;
+                    }
+                    else {
+                        outputMessage.payload.reason = "socket timeout";
+                    }
+                }
+                
+                // Reset all previous errors
+                node.errors = {};
+                
+                node.send([null, outputMessage, null, null]);
+                
+                node.processStatus = "STOPPED";
+
                 // If there is a timer running (to kill the subprocess), then remove it because the process seems to have stopped already gracefully
                 if(node.sigkillTimeout) {
                     clearTimeout(node.sigkillTimeout);
@@ -370,7 +410,7 @@
                     // child process instance gracefully (via SIGTERM)
                     node.ffmpegProcess.stdin.removeAllListeners('error');
                     if (node.ffmpegProcess instanceof ChildProcess && node.ffmpegProcess.kill(0)) {
-                        node.processStatus === "TERMINATING";
+                        node.processStatus = "TERMINATING";
                         node.ffmpegProcess.kill('SIGTERM');
                     }
                 }
@@ -416,7 +456,9 @@
                     if(Buffer.isBuffer(data)) {
                         data = data.toString();
                     }
-                    node.send([null, {topic: "error", payload: data}, null, null]);
+                    
+                    // Remeber the error (under the 'stderr' section) to send it later on via the 'stopped' output message
+                    node.errors.stderr = data;
                 }
             });
             
@@ -509,12 +551,12 @@
                 node.warn("killing timeout", msg);
                 node.debug(`sigkill timeout`);
                 if (node.ffmpegProcess instanceof ChildProcess && node.ffmpegProcess.kill(0)) {
-                    node.processStatus === "KILLING";
+                    node.processStatus = "KILLING";
                     node.ffmpegProcess.kill('SIGKILL');
                 }
             }, 2000);
 
-            node.processStatus === "STOPPING";
+            node.processStatus = "STOPPING";
             
             node.debug("stop stdin");
 
@@ -621,7 +663,6 @@
             }
             catch(err) {
                 node.error(err);
-                node.send([null, { topic: 'node error', payload: err }, null, null]);
             }
 
             if(!msg.topic) {
