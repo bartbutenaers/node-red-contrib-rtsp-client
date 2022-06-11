@@ -3,6 +3,8 @@ A Node-RED node that acts as an RTSP client (via Ffmpeg).
 
 This node allows you to control an RTSP stream from an IP cam, to capture the audio and video segments in Node-RED.  This will be achieved by starting FFmpeg in a child process.  This node will compose the required FFmpeg command line parameter list under the hood, based on settings entered in the config screen.
 
+***Have a look at the [wiki](https://github.com/bartbutenaers/node-red-contrib-rtsp-client/wiki) for extra tutorials!***
+
 ## Install
 Run the following npm command in your Node-RED user directory (typically ~/.node-red):
 ```
@@ -145,6 +147,19 @@ Note that this flow requires some extra nodes to be installed, in order to be ab
 Most of these nodes can be removed as soon as everything is up and running, but can be useful while tweaking all the settings.
 
 Remark: you can't compare the message speed with the frame rate (from the statistics output message), because the latter one is the frame rate in the compressed video...
+
+### Stream monitoring
+In most cases it will be useful to activate stream monitoring:
+1. Suppose there is some kind of failure in your camera, so it stops tranferring data segments via RTSP to this node.
+2. Since the stream is not stopped, this problem will stay undetected.  Indeed there is no sign of failure, except from the missing data...
+3. This can solve by configuring the *"socket timeout"* setting, in the config screen:
+
+   ![socket timeout](https://user-images.githubusercontent.com/14224149/173202535-059093ff-8e68-478d-8473-1e61b76dfa8e.png)
+
+4. A value of 5000 (milliseconds!) means that the stream will automatically be closed by this node, as soon as it hasn't received any data in the last 5 seconds.
+5. To get a grip on how often such restarts happen, have e look at the "reason" property inside the output messages (with `msg.topic` *"stopped"*) :
+
+   ![socket timeout](https://user-images.githubusercontent.com/14224149/173202712-60767889-c697-42d4-9dbe-09ced6a14607.png)
 
 ### Get information about FFmpeg
 When you have setup FFmpeg, it might be useful to get some information about FFmpeg (version number, supported decoders, ...).  All that information can be collected via the FFmpeg command line interface, but that might be not easy to access (e.g. when running Node-RED in a Docker container).  Therefore this node allows you to get some basic information from FFmpeg, simply by injecting messages into this node.
@@ -315,7 +330,9 @@ The resolution of the output jpeg images, as width and height in pixels.  When t
 ### Advanced
 
 #### Socket timeout
-The socket TCP I/O timeout in micro seconds.  When this field is empty, the node will keep waiting for the RTSP stream to arrive.
+The socket TCP I/O timeout in micro seconds.  When this field is empty, the node will keep waiting for the RTSP stream to arrive.  See the *"stream monitoring"* section above for more information about this setting.
+
+CAUTION: In older versions of FFmpeg this option will not be available or not work correctly.  So use at least an FFmpeg build from 2022!
 
 #### Maximum delay
 A low delay value will a.o. result in the re-ordering buffer to be skipped. 
