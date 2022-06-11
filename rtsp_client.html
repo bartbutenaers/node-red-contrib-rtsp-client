@@ -23,7 +23,7 @@
                 }
             },
             rtspUrl: {value: ""},
-            statisticsPeriod: {value: null},
+            statisticsInterval: {value: null},
             restartPeriod: {value: null},
             autoStart: {value: "disable"},
             videoCodec: {value: "copy"},
@@ -156,8 +156,8 @@
                 </select>
             </div>
             <div class="form-row">
-                <label for="node-input-statisticsPeriod"><i class="fa fa-area-chart"></i> Stats period</label>
-                <input type="number" id="node-input-statisticsPeriod">
+                <label for="node-input-statisticsInterval"><i class="fa fa-area-chart"></i> Stats interval</label>
+                <input type="number" id="node-input-statisticsInterval">
             </div>
             <div class="form-row">
                 <label for="node-input-restartPeriod"><i class="fa fa-refresh"></i> Restart period</label>
@@ -292,8 +292,8 @@
             <li><i>HTTP:</i> HTTP tunnel for RTSP across proxies.</li>
         </ul>
     </p>
-    <p><strong>Stats period:</strong><br/>
-    The time period between statistic output messages (in seconds).  Note that decimals are allowed (e.g. <code>2.5</code>).  When this field is empty, no statistics messages will be sent.</p>
+    <p><strong>Stats interval:</strong><br/>
+    The time interval between statistic output messages (in seconds).  When this field is empty, no statistics messages will be sent.</p>
     <p><strong>Restart period:</strong><br/>
     After which period (in seconds) the RTSP stream should restart, after an unexpected halt.  When this field is empty, the stream will not be restarted automatically.</p>
     <p><strong>Auto start:</strong><br/>
