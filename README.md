@@ -56,13 +56,23 @@ The following flow demonstrates how to do this:
 
 In case of a restart, the stream will first be stopped and then started again (as soon as the stream is stopped completely).  This much more convenient compared to send successive stop and start messages yourself, because in that case you would have to watch the status (and only send the start as soon as the stream has been stopped).
 
-A ***status message*** will be send on the *"Status"* output, every time the status of the stream changes:
+A ***status message*** will be send on the *"Status"* output, every time the status of the stream changes.  The `msg.topic` will be:
++ ***"started"*** when the stream is started.  The `msg.payload` will contain both the PID of the FFmpeg child process`, and the *generated FFMpeg command line arguments* (as an array):
 
-![status updates](https://user-images.githubusercontent.com/14224149/172038031-7fa60387-886e-412c-ba74-518593a2a546.png)
+   ![started output msg](https://user-images.githubusercontent.com/14224149/173192143-4cdc739e-726e-419b-bd75-ab6bbe4803a0.png)
+   
+   It might be useful to analyze the generated command line arguments, to understand how this node communicates with FFmpeg (and as an aid during troubleshooting).
 
-The payload will contain the PID, i.e. the process id of the FFmpeg child process.  That is the same PID as you will see appearing in the node status.  Note that the "started" status message will also contain the generated FFmpeg ***command line arguments*** (which might be useful to analyze to understand how this node communicates with FFmpeg):
++ ***"stopped"*** when the stream is stopped.   The `msg.payload` will contain both the PID of the FFmpeg child process`, and the *reason* why the stream was stopped:
 
-![start status message](https://user-images.githubusercontent.com/14224149/172038363-c3038a17-a120-4f89-909b-b75ae2443a6f.png)
+   ![stopped output msg](https://user-images.githubusercontent.com/14224149/173192295-1785fe56-2126-4624-b017-7c0580bf4d34.png)
+   
+   There are different reasons why a stream has stopped:
+   + *"input msg"*: when the stream was stopped by injecting an input messag with topic 'stop'.
+   + *"input msg"*: when the stream was stopped due to an FFmpeg error (e.g. invalid command line argument).  In this case the list of errors will also be included.  The errors are stored per category, based on where they were raised (by the child 'process' or in the ffmpeg 'stderr' pipe).
+   + *"socket timeout"*: if no data arrived within the socket timeout interval (as specified in the config screen).
+
+The PID (process id) in the payload of those messages, is the same PID as you will see appearing in the node status.
 
 ### Handling the audio/video segments
 Once an RTSP stream is started, this node will start sending output messages on the *"Data"* output.  These messages will contain ***MP4 containers***, containing audio and/or video chunks (as specified in the audio and video codecs in the config screen).
@@ -205,8 +215,8 @@ The network transport protocol being used to transfer the packets from the camer
 
 Although TCP connections will introduce an extra delay (due to packet retransmissions), it is the preferred protocol to avoid artifacts (e.g. image smearing)!
 
-#### Stats period
-The time period between statistic output messages (in seconds).  Note that decimals are allowed (e.g. ``2.5`).  When this field is empty, no statistics messages will be sent.
+#### Stats interval
+The time interval between statistic output messages (in seconds).  Note that decimals are allowed (e.g. ``2.5`).  When this field is empty, no statistics messages will be sent.
 
 #### Restart period
 After which period (in seconds) the RTSP stream should be restarted automatically, after an unexpected halt has occurred:
