@@ -46,6 +46,7 @@
         this.maximumDelay       = config.maximumDelay;
         this.socketBufferSize   = config.socketBufferSize;
         this.reorderQueueSize   = config.reorderQueueSize;
+        this.traceLog           = config.traceLog;
         this.ffmpegProcess      = null;
         this.processStatus      = "STOPPED";
         this.jpegChunks         = [];
@@ -64,8 +65,23 @@
         if(node.autoStart === "enable") {
             startFFmpegProcess(null);
         }
+        
+        function traceLog(text) {
+            if(node.traceLog === "enable") {
+                var processInfo = "";
+                
+                // Show info about the process if available
+                if(node.ffmpegProcess) {
+                    processInfo = " (pid " + node.ffmpegProcess.pid + ")";
+                }
+                
+                console.log("RTSP node (" + node.id + ")" + processInfo + " => " + text);
+            }
+        }
 
         function startFFmpegProcess(msg) {
+            traceLog("startFFmpegProcess");
+
             if (node.processStatus === "RUNNING") {
                 node.warn("the child process is already started");
                 // No need to stop the process
@@ -306,21 +322,23 @@
 
             node.ffmpegProcess.on('error', function(err) {
                 if (err.code === 'ENOENT') {
-                    error.message = "Cannot find FFMpeg executable.";
+                    // Make this particular error a bit more understandable for the users
+                    err.message = "Cannot find FFMpeg executable";
                 }
+                traceLog("ffmpegProcess error: " + err);
                 
                 node.error("child process error: " + err, msg);
-                node.status({ fill: 'red', shape: 'dot', text: err.toString() });
+                node.status({ fill: 'red', shape: 'dot', text: 'error' });
                 
-                // Remeber the error (under the 'process' section) to send it later on via the 'stopped' output message
                 node.errors.process = err.toString();
             });
             
             node.ffmpegProcess.on('uncaughtException', function (err) {
+                traceLog("ffmpegProcess uncaught error: " + err);
+
                 node.error("child process uncaucht error: " + err, msg);
-                node.status({ fill: 'red', shape: 'dot', text: err.toString() });
+                node.status({ fill: 'red', shape: 'dot', text: 'error' });
                 
-                // Remeber the error (under the 'process' section) to send it later on via the 'stopped' output message
                 node.errors.process = err.toString();
             });
             
@@ -329,9 +347,20 @@
                 node.ffmpegProcess = null;
                 return;
             }
+
+            // When the 'spawn' event occurs, the child process has been spawned successfully
+            node.ffmpegProcess.on('spawn', function() {
+                traceLog("ffmpegProcess spawned");
+            });
             
+            // When the 'close' event occurs, the child process its stdio's are not yet closed.
+            node.ffmpegProcess.on('exit', function(code) {
+                traceLog("ffmpegProcess exit with code=" + code);
+            });
+            
+            // When the 'close' event occurs, the child process has exited and all its stdio's have been closed.
             node.ffmpegProcess.on('close', function(code, signal) {
-                node.debug("child process closed", msg);
+                traceLog("ffmpegProcess close with code=" + code + " and signal=" + signal);
                 node.status({ fill: 'blue', shape: 'dot', text: "stopped" });
                 
                 var outputMessage = {
@@ -350,7 +379,6 @@
                 else {
                     if(Object.keys(node.errors).length > 0) {
                         outputMessage.payload.reason = "error";
-                        // Include in th output message all the errors that have been registered
                         outputMessage.payload.errors = node.errors;
                     }
                     else {
@@ -398,12 +426,13 @@
             
             // By registering to stdin errors, we can avoid uncatchable errors being thrown when the child process is abruptly closed during a large write operation
             node.ffmpegProcess.stdin.on('error', function(err) {
+                traceLog("stdin error: " + err);
                 node.error("stdin error: " + err, msg);
             });
 
             // Try to terminate the FFmpeg subprocess gently 
             node.ffmpegProcess.stdin.on('close', function() {
-                node.debug("stdin closed", msg);
+                traceLog("stdin close");
                 
                 if(node.ffmpegProcess) {
                     // When the stdin pipe is closed explicit via an input message, we need to terminate the corresponding
@@ -429,18 +458,19 @@
                 let pipeSocket = node.ffmpegProcess.stdio[i];
 
                 pipeSocket.on('error', function(err) {
+                    traceLog("pipe " + i + " (" + pipes[i].name + ") error: " + err);
                     node.error("pipe " + i + " (" + pipes[i].name + ") error: " + err, msg);
                 });
 
                 pipeSocket.on('close', function() {
-                    node.debug("pipe " + i + " (" + pipes[i].name + ") closed: ", msg);
+                    traceLog("pipe " + i + " (" + pipes[i].name + ") close");
                     pipeSocket.removeAllListeners('data');
                     pipeSocket.removeAllListeners('error');
                 });
             }
             
 
-            // Handle the data arriving on pipe 1 (which is the standard stdout).
+            // Handle the data arriving on pipe 1 (which is the standard 'stdout'), i.e. where all the audio/video segments arrive.
             // This data might be only chunks of an mp4 segment, if the mp4 segments are larger than the OS pipe buffer size.
             let pipe1Socket = node.ffmpegProcess.stdio[1];
             pipe1Socket.on('data', function(data) {
@@ -449,15 +479,16 @@
                 }
             });
             
-            // Handle the data arriving on pipe 2 (which is the standard stderr)
+            // Handle the data arriving on pipe 2 (which is the standard stderr), where FFmpeg will output all its errors.
             let pipe2Socket = node.ffmpegProcess.stdio[2];
             pipe2Socket.on('data', function(data) {
+                traceLog("pipe 2 (stderr) data: " + data.toString().trim());
+
                 if (data.length > 1) {
                     if(Buffer.isBuffer(data)) {
-                        data = data.toString();
+                        data = data.toString().trim();
                     }
                     
-                    // Remeber the error (under the 'stderr' section) to send it later on via the 'stopped' output message
                     node.errors.stderr = data;
                 }
             });
@@ -533,6 +564,8 @@
         // 3.- When the FFmpeg subprocess hasn't terminated gently after 2 seconds, we will kill it.
         // 4.- As soon as the FFmpeg subprocess has closed, we will do some cleanup in this node.
         function stopFFmpegProcess(msg) {
+            traceLog("stopFFmpegProcess");
+
             if(node.processStatus !== "RUNNING") {
                 node.warn("no process running yet");
                 // No need to stop the process
@@ -548,8 +581,8 @@
             
             // When the application in the subprocess has refused to terminate (after the SIGTERM signal), we will force to kill it after 2 seconds
             node.sigkillTimeout = setTimeout(function() {
-                node.warn("killing timeout", msg);
-                node.debug(`sigkill timeout`);
+                traceLog("process killed after timeout");
+
                 if (node.ffmpegProcess instanceof ChildProcess && node.ffmpegProcess.kill(0)) {
                     node.processStatus = "KILLING";
                     node.ffmpegProcess.kill('SIGKILL');
@@ -557,8 +590,6 @@
             }, 2000);
 
             node.processStatus = "STOPPING";
-            
-            node.debug("stop stdin");
 
             // End the stdin of the FFmpeg process to flush the data it contains
             node.ffmpegProcess.stdin.end();
@@ -603,7 +634,6 @@
                             }
                             
                             let versionInfo = stdout.replace(/\r\n?|\n/g, '\n').split('\n');
-                            node.debug(versionInfo);
                             
                             // Extract the ffmpeg version number from the long string
                             //let ffmpegVersion = versionInfo.match(/ffmpeg version ([^ ]*) /)[1];
@@ -652,7 +682,6 @@
                             // Seems that this kind of output is send by ffprobe to stderr (instead of stdout).
                             // See https://trac.ffmpeg.org/ticket/5880
                             let probeOutput = stderr;
-                            node.debug(probeOutput);
 
                             node.send([null, { topic: "ffprobe", payload: probeOutput}, null, null]);
                         });
