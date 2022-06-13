@@ -323,7 +323,7 @@
             node.ffmpegProcess.on('error', function(err) {
                 if (err.code === 'ENOENT') {
                     // Make this particular error a bit more understandable for the users
-                    err.message = "Cannot find FFMpeg executable";
+                    err.message = "Cannot find FFmpeg executable";
                 }
                 traceLog("ffmpegProcess error: " + err);
                 
