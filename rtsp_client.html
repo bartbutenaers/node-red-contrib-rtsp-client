@@ -17,7 +17,7 @@
         defaults: {
             name: {value: ""},
             ffmpegPath: {
-                value: "",
+                value: "ffmpeg",
                 validate: function (cmdPath) {
                     return cmdPath === '' || /^\s*$|ffmpeg/i.test(cmdPath);
                 }
