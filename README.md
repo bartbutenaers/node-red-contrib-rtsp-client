@@ -345,6 +345,9 @@ The number of packets to buffer for handling of reordered packets.
 
 When receiving data over UDP, the demuxer tries to reorder received packets, since they may arrive out of order (or packets may get lost totally). 
 
+#### Trace log
+Activate trace logging (i.e. detailed logging), in case you need to troubleshoot FFmpeg child process related issues.
+
 ## Troubleshooting
 
 ### Image smearing
