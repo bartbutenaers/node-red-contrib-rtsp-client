@@ -43,7 +43,8 @@
             socketTimeout: {value: null},
             maximumDelay: {value: null},
             socketBufferSize: {value: null},
-            reorderQueueSize: {value: null}
+            reorderQueueSize: {value: null},
+            traceLog: {value: "disable"}
         },
         credentials: {
             userName: {type: "text"},
@@ -122,7 +123,7 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     </br>
-        <div class="form-row">
+    <div class="form-row">
         <!-- Tabsheets -->
         <ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="node-rtsp-tabs"></ul>
     </div>
@@ -264,6 +265,13 @@
                 <label for="node-input-reorderQueueSize"><i class="fa fa-refresh"></i> Reorder queue size</label>
                 <input type="number" id="node-input-reorderQueueSize">
             </div>
+            <div class="form-row">
+                <label for="node-input-traceLog"><i class="fa fa-file-text-o"></i> Trace log</label>
+                <select id="node-input-traceLog" style="width:70%;">
+                    <option value="enable">Enable</option> 
+                    <option value="disable">Disable</option>
+                </select>
+            </div>
         </div>
     </div>
 </script>
@@ -362,5 +370,7 @@
     <p><strong>Socket buffer size:</strong><br/>
     The maximum UDP socket receive buffer size in bytes.</p>    
     <p><strong>Reorder queue size:</strong><br/>
-    The number of packets to buffer for handling of reordered packets.</p>    
+    The number of packets to buffer for handling of reordered packets.</p>
+    <p><strong>Trace log:</strong><br/>
+    Whether trace logging should be enabled, which can be used for troubleshooting FFmpeg child process related problems.</p>  
 </script>
