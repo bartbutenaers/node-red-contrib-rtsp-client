@@ -350,6 +350,14 @@ Activate trace logging (i.e. detailed logging), in case you need to troubleshoot
 
 ## Troubleshooting
 
+### No FFmpeg child process
+
+There can be multiple reasons why the FFmpeg child process stops suddenly:
++ When the FFmpeg executable cannot be found.  Note that in this case even no child process will be spawned.
++ A timeout of the data stream.  This will only be detected if the 'timeout' has been configured.
++ Incorrect FFmpeg command line arguments.  If this node for some reason generates invalid FFmpeg command line parameters, then the FFmpeg process will be started but FFmpeg will close the child process immediately due to a parsing error.  Pretty normal that FFmpeg stops the child process, because it doesn't know what you want it to do.
++ ...
+
 ### Image smearing
 An UDP buffer that is not big enough to hold an entire image I-frame, can result in ***image smearing***:
 
