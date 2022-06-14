@@ -15,7 +15,6 @@
  **/
  module.exports = function(RED) {
     var settings = RED.settings;
-    const os = require('node:os');
     const Pipe2Jpeg = require('pipe2jpeg');
     const { exec, spawn, ChildProcess } = require('child_process');
     
