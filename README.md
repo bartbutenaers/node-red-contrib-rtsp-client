@@ -350,8 +350,19 @@ Activate trace logging (i.e. detailed logging), in case you need to troubleshoot
 
 ## Troubleshooting
 
-### No FFmpeg child process
+### FFmpeg option not found
+When the stream immediately stops (after starting it) with the following error:
+`
+Error splitting the argument list: Option not found
+`
+Since FFmpeg often does not mention which option is not found, you will need to adjust the log level and look at the end of the logs.  
+This will be solved by installing FFmpeg again:
++ Installing a more recent FFmpeg version, that supports the specified option (see wiki).
++ Installing an FFmpeg version with GPU support, in case it fails because you try to start using GPU but your FFmpeg was not build with GPU support enabled.
++ Installing an FFmpeg version with special decoder support, e.g. you try to use H.265 but your FFmpeg was not build with a H.264 codec enabled.
++ ...
 
+### No FFmpeg child process
 There can be multiple reasons why the FFmpeg child process stops suddenly:
 + When the FFmpeg executable cannot be found.  Note that in this case even no child process will be spawned.
 + A timeout of the data stream.  This will only be detected if the 'timeout' has been configured.
