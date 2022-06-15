@@ -499,7 +499,7 @@
                     try {
                         // The data contains progress information as a buffer, with following content (after string conversion):
                         // "frame=5\nfps=0.00\nstream_0_0_q=-1.0\nstream_1_0_q=6.3\nbitrate=  41.3kbits/s\n..."
-                        let progressInfo = JSON.parse('{"' + data.toString().trim().replace(/\r\n?|\n/g, '","').replace(/\s/g, '').replaceAll('=', '": "') + '"}');
+			let progressInfo = JSON.parse('{"' + data.toString().trim().replace(/\r\n?|\n/g, '","').replace(/\s/g, '').replace(/=/g, '": "') + '"}');
                         
                         node.send([null, null, {payload: progressInfo}, null]);
                     }
