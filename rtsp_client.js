@@ -517,7 +517,6 @@
             // Handle the data arriving on pipe 4 (which is an additional output pipe to retrieve jpeg images)
             let pipe4Socket = node.ffmpegProcess.stdio[4];
             pipe4Socket.on('data', function(data) {
-return;
                 if (data.length > 1) {
                     if(data[0] == 0xff && data[1] == 0xd8 && data[data.length -2 ] == 0xff && data[data.length - 1] == 0xd9) {
                         // The data buffer starts with ffd8 and ends with ffd9, which means it represents 1 complete jpeg image.
