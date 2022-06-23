@@ -241,6 +241,13 @@
             // ----------------------------------------------------------------------------------------------
             // Output 'jpeg' (pipe 4) options
             // ----------------------------------------------------------------------------------------------
+            
+            // Not very clear how image2pipe works.  See source code:
+            // http://git.videolan.org/?p=ffmpeg.git;a=blob;f=libavformat/img2.c;h=3530cffdb3bb24623c7d1d0c15c84e38ec93507d;hb=146210caf9cf95a35f660199ba5b0aa850fc18d7
+            // It tells FFmpeg to convert the video into a sequence of frame images.
+            // Perhaps it works in two directions (to and from pipe), because this is in the docs:
+            //     You can also use cat to pipe images to ffmpeg:
+            //     cat *.jpg | ffmpeg -f image2pipe -c:v mjpeg -i - output.mpg
 
             if(node.imageSource == 'all_frames') { // This will consume a lot of CPU due to decoding the H.264 to Jpeg images
                 // Send the output to a pipe (instead of to a file) to do everything in-memory 
@@ -255,7 +262,7 @@
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['pipe:4']);
             }
             else if(node.imageSource == 'i_frames') {
-                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']); // Send the output to a pipe (instead of to a file) to do everything in-memory 
+                ffmpegCmdArgs = ffmpegCmdArgs.concat(['-f', 'image2pipe']); // Send the output to a pipe (instead of to a file) to do everything in-memory : 
                 // TODO adjustable frame rate (select='eq(pict_type,PICT_TYPE_I)',scale=trunc(iw/4):-2)
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vf', "select='eq(pict_type,PICT_TYPE_I)'"]);// Filtergraph to extract the I frames (= keyframes that contain all the data necessary for the image and are not interpolated), and dynamic scaling for 75 percent of the original input width and having the width and height divisible by 2 and keeping the aspect ratioCFR output.
                 ffmpegCmdArgs = ffmpegCmdArgs.concat(['-vsync', 'vfr']); // use variable frame rate to make sure the timestamps (of the extracted I frames) are still ok
@@ -450,8 +457,7 @@
                     // TODO perhaps show an error here, because it was an unexpected condition!!
                 }
             });
-            
-            
+
             // Listen for the events on all output pipes (so not on stdin which has already been handled above)
             for (let i = 1; i < pipes.length; ++i) {
                 let pipeSocket = node.ffmpegProcess.stdio[i];
@@ -467,7 +473,6 @@
                     pipeSocket.removeAllListeners('error');
                 });
             }
-            
 
             // Handle the data arriving on pipe 1 (which is the standard 'stdout'), i.e. where all the audio/video segments arrive.
             // This data might be only chunks of an mp4 segment, if the mp4 segments are larger than the OS pipe buffer size.
@@ -499,7 +504,7 @@
                     try {
                         // The data contains progress information as a buffer, with following content (after string conversion):
                         // "frame=5\nfps=0.00\nstream_0_0_q=-1.0\nstream_1_0_q=6.3\nbitrate=  41.3kbits/s\n..."
-			let progressInfo = JSON.parse('{"' + data.toString().trim().replace(/\r\n?|\n/g, '","').replace(/\s/g, '').replace(/=/g, '": "') + '"}');
+                        let progressInfo = JSON.parse('{"' + data.toString().trim().replace(/\r\n?|\n/g, '","').replace(/\s/g, '').replace(/=/g, '": "') + '"}');
                         
                         node.send([null, null, {payload: progressInfo}, null]);
                     }
@@ -512,6 +517,7 @@
             // Handle the data arriving on pipe 4 (which is an additional output pipe to retrieve jpeg images)
             let pipe4Socket = node.ffmpegProcess.stdio[4];
             pipe4Socket.on('data', function(data) {
+return;
                 if (data.length > 1) {
                     if(data[0] == 0xff && data[1] == 0xd8 && data[data.length -2 ] == 0xff && data[data.length - 1] == 0xd9) {
                         // The data buffer starts with ffd8 and ends with ffd9, which means it represents 1 complete jpeg image.
@@ -669,8 +675,8 @@
                         });
                         break;
                     case "probe":
-                        // The ffprobe.exe is located in the same directory as ffmpeg.exe
-                        const ffprobePath = node.ffmpegPath.replace('ffmpeg.exe', 'ffprobe.exe');
+                        // The ffprobe.exe is located in the same directory as ffmpeg.exe.  Note that the extension .exe is optional.
+                        const ffprobePath = node.ffmpegPath.replace(/ffmpeg$/, 'ffprobe').replace(/ffmpeg.exe$/, 'ffprobe.exe');
                        
                         exec(ffprobePath + ' -hide_banner -i "' + node.rtspUrl + '"', (error, stdout, stderr) => {
                             if (error) {
