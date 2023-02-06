@@ -46,6 +46,7 @@
         this.socketBufferSize   = config.socketBufferSize;
         this.reorderQueueSize   = config.reorderQueueSize;
         this.traceLog           = config.traceLog;
+        this.logLevel           = config.logLevel;
         this.ffmpegProcess      = null;
         this.processStatus      = "STOPPED";
         this.jpegChunks         = [];
@@ -94,7 +95,7 @@
             // ----------------------------------------------------------------------------------------------
 
             // Send only error data on stderr
-            ffmpegCmdArgs = ffmpegCmdArgs.concat(['-loglevel', '+level+fatal']);
+            ffmpegCmdArgs = ffmpegCmdArgs.concat(['-loglevel', node.logLevel]);
 
             // Make sure the progress is clear and parsable (see https://superuser.com/a/1460400)
             ffmpegCmdArgs = ffmpegCmdArgs.concat(['-nostats']);
