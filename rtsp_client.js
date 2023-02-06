@@ -371,7 +371,8 @@
                 
                 var outputMessage = {
                     topic: 'stopped',
-                    payload: {
+                    payload: { 
+                        arguments: ffmpegCmdArgs,
                         pid: node.ffmpegProcess.pid,
                         reason: "unknown"
                     }
