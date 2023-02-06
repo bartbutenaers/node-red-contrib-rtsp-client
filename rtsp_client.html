@@ -44,7 +44,8 @@
             maximumDelay: {value: null},
             socketBufferSize: {value: null},
             reorderQueueSize: {value: null},
-            traceLog: {value: "disable"}
+            traceLog: {value: "disable"},
+            logLevel: {value: "error"}
         },
         credentials: {
             userName: {type: "text"},
@@ -272,6 +273,20 @@
                     <option value="disable">Disable</option>
                 </select>
             </div>
+            <div class="form-row">
+                <label for="node-input-logLevel"><i class="fa fa-search-plus"></i> Log level</label>
+                <select id="node-input-logLevel" style="width:70%;">
+                    <option value="quiet">No log (quiet)</option>
+                    <!-- <option value="panic">Panic</option> -->
+                    <option value="fatal">Fatal errors</option>
+                    <option value="error">Errors</option>
+                    <option value="warning">Warning and errors</option>
+                    <option value="info">Informative messages</option>
+                    <option value="verbose">Verbose messages</option>
+                    <option value="debug">Debug messages</option>
+                    <option value="trace">Trace messages</option>
+                </select>
+            </div>
         </div>
     </div>
 </script>
@@ -372,5 +387,7 @@
     <p><strong>Reorder queue size:</strong><br/>
     The number of packets to buffer for handling of reordered packets.</p>
     <p><strong>Trace log:</strong><br/>
-    Whether trace logging should be enabled, which can be used for troubleshooting FFmpeg child process related problems.</p>  
+    Whether trace logging should be enabled, which can be used for troubleshooting FFmpeg child process related problems.</p>
+    <p><strong>Log level:</strong><br/>
+    Specify which kind of information should arrive in the log, ranging from nothing to everything</p>
 </script>
