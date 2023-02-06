@@ -376,6 +376,10 @@ This will be solved by installing FFmpeg again:
 + Installing an FFmpeg version with special decoder support, e.g. you try to use H.265 but your FFmpeg was not build with a H.264 codec enabled.
 + ...
 
+Or circumvent the error, by adjusting this node's settings so the unsupported argument is not generated anymore inside the FFmpeg command.  For example the 'stats_period' parameter is not generated when the content of the corresponding input field is cleared:
+
+![image](https://user-images.githubusercontent.com/14224149/217076424-093d885e-e9d3-4cda-8111-6d9cf5970136.png)
+
 ### No FFmpeg child process
 There can be multiple reasons why the FFmpeg child process stops suddenly:
 + When the FFmpeg executable cannot be found.  Note that in this case even no child process will be spawned.
