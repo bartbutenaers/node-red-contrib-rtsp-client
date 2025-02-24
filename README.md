@@ -6,9 +6,9 @@ This node allows you to control an RTSP stream from an IP cam, to capture the au
 ***Have a look at the [wiki](https://github.com/bartbutenaers/node-red-contrib-rtsp-client/wiki) for extra tutorials!***
 
 ## Install
-Run the following npm command in your Node-RED user directory (typically ~/.node-red):
+This node has ***not*** been published on NPM, so it needs to be installed directly from this Github repo.  Run the following npm command in your Node-RED user directory (typically ~/.node-red):
 ```
-npm install node-red-contrib-rtsp-client
+npm install bartbutenaers/node-red-contrib-rtsp-client
 ```
 
 I would like to thank [Kevin Godell](https://github.com/kevinGodell) for sharing all his FFmpeg knowledge with the Node-RED community.  This node contains a lot of information that I learned from him.  Please have a look at his [node-red-contrib-ffmpeg-spawn](https://github.com/kevinGodell/node-red-contrib-ffmpeg-spawn) node if you want to do other stuff with FFmpeg in Node-RED.  
